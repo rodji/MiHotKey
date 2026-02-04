@@ -54,12 +54,6 @@ internal sealed class Router
 
         _matcher.SetRules(cfg.Targets.Rules);
 
-        _defaultRuleToShortcut.Clear();
-        foreach (var route in cfg.Routes)
-        {
-            _defaultRuleToShortcut[route.Rule] = route.Shortcut;
-        }
-
         _ruleToShortcutByTrigger.Clear();
         foreach (var (triggerId, routes) in cfg.RoutesByTrigger)
         {

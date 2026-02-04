@@ -29,9 +29,6 @@ internal sealed class AppConfig
     [JsonPropertyName("shortcuts")]
     public Dictionary<string, ShortcutConfig> Shortcuts { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
-    [JsonPropertyName("routes")]
-    public RouteConfig[] Routes { get; init; } = [];
-
     [JsonPropertyName("routesByTrigger")]
     public Dictionary<string, RouteConfig[]> RoutesByTrigger { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }

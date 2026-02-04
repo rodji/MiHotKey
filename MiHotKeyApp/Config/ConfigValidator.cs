@@ -50,19 +50,6 @@ internal static class ConfigValidator
         }
 
         var shortcuts = new HashSet<string>(cfg.Shortcuts.Keys, StringComparer.OrdinalIgnoreCase);
-        foreach (var route in cfg.Routes)
-        {
-            if (!ruleIds.Contains(route.Rule))
-            {
-                throw new InvalidDataException($"routes rule not found: {route.Rule}");
-            }
-
-            if (!shortcuts.Contains(route.Shortcut))
-            {
-                throw new InvalidDataException($"routes shortcut not found: {route.Shortcut}");
-            }
-        }
-
         var triggerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var hotkey in cfg.Inputs.Hotkeys)
         {
