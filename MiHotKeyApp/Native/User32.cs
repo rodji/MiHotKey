@@ -75,6 +75,9 @@ internal static class User32
     [DllImport("user32.dll")]
     public static extern nint GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(nint hWnd);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
@@ -86,7 +89,7 @@ internal static class User32
 
     public static string GetWindowTitle(nint hwnd)
     {
-        if (hwnd == 0)
+        if (hwnd == 0 || !IsWindow(hwnd))
         {
             return "";
         }
@@ -98,6 +101,21 @@ internal static class User32
 
         var sb = new StringBuilder(cap);
         var copied = GetWindowTextW(hwnd, sb, sb.Capacity);
+        return copied > 0 ? sb.ToString() : "";
+    }
+
+    [DllImport("user32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]
+    public static extern int GetClassNameW(nint hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    public static string GetWindowClassName(nint hwnd)
+    {
+        if (hwnd == 0 || !IsWindow(hwnd))
+        {
+            return "";
+        }
+
+        var sb = new StringBuilder(256);
+        var copied = GetClassNameW(hwnd, sb, sb.Capacity);
         return copied > 0 ? sb.ToString() : "";
     }
 

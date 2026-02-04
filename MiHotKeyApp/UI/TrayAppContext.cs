@@ -9,6 +9,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _reload;
     private readonly ToolStripMenuItem _showLog;
+    private readonly ToolStripMenuItem _toggleForegroundTracking;
     private readonly ToolStripMenuItem _exit;
     private readonly LogWindowPresenter _logPresenter;
     private readonly ILogger _logger;
@@ -35,6 +36,14 @@ internal sealed class TrayAppContext : ApplicationContext
         _showLog.Click += (_, __) => _logPresenter.Show();
         menu.Items.Add(_showLog);
 
+        _toggleForegroundTracking = new ToolStripMenuItem("Foreground tracking")
+        {
+            CheckOnClick = true,
+            Checked = true,
+        };
+        _toggleForegroundTracking.Click += (_, __) => ForegroundTrackingToggled?.Invoke(_toggleForegroundTracking.Checked);
+        menu.Items.Add(_toggleForegroundTracking);
+
         menu.Items.Add(new ToolStripSeparator());
 
         _exit = new ToolStripMenuItem("Exit");
@@ -45,12 +54,19 @@ internal sealed class TrayAppContext : ApplicationContext
     }
 
     public event Action? ReloadConfigRequested;
+    public event Action<bool>? ForegroundTrackingToggled;
 
     public void ApplyTrayConfig(TraySection tray)
     {
         _reload.Visible = tray.ReloadConfig;
         _showLog.Visible = tray.ShowLog;
         _exit.Visible = tray.Exit;
+        _toggleForegroundTracking.Visible = tray.ToggleForegroundTracking;
+    }
+
+    public void SetForegroundTrackingChecked(bool enabled)
+    {
+        _toggleForegroundTracking.Checked = enabled;
     }
 
     protected override void ExitThreadCore()
@@ -69,4 +85,3 @@ internal sealed class TrayAppContext : ApplicationContext
         base.ExitThreadCore();
     }
 }
-

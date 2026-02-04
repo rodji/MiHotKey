@@ -19,7 +19,8 @@ internal sealed class Router
     private readonly FocusController _focus;
     private readonly KeySender _sender;
 
-    private readonly Dictionary<string, string> _ruleToShortcut = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _defaultRuleToShortcut = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> _ruleToShortcutByTrigger = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, (ParsedShortcut Shortcut, SendMode Mode)> _shortcuts = new(StringComparer.OrdinalIgnoreCase);
 
     private TargetSelectionMode _mode = TargetSelectionMode.ForegroundThenPrevious;
@@ -53,10 +54,21 @@ internal sealed class Router
 
         _matcher.SetRules(cfg.Targets.Rules);
 
-        _ruleToShortcut.Clear();
+        _defaultRuleToShortcut.Clear();
         foreach (var route in cfg.Routes)
         {
-            _ruleToShortcut[route.Rule] = route.Shortcut;
+            _defaultRuleToShortcut[route.Rule] = route.Shortcut;
+        }
+
+        _ruleToShortcutByTrigger.Clear();
+        foreach (var (triggerId, routes) in cfg.RoutesByTrigger)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var route in routes)
+            {
+                map[route.Rule] = route.Shortcut;
+            }
+            _ruleToShortcutByTrigger[triggerId] = map;
         }
 
         _shortcuts = cfg.Shortcuts.ToDictionary(
@@ -89,7 +101,13 @@ internal sealed class Router
                 continue;
             }
 
-            if (!_ruleToShortcut.TryGetValue(rule.Id, out var shortcutId))
+            var routes = _defaultRuleToShortcut;
+            if (_ruleToShortcutByTrigger.TryGetValue(triggerId, out var byTrigger))
+            {
+                routes = byTrigger;
+            }
+
+            if (!routes.TryGetValue(rule.Id, out var shortcutId))
             {
                 _logMatch.LogInformation("rule={rule} prio={prio} shortcut=missing", rule.Id, rule.Prio);
                 return;

@@ -20,10 +20,12 @@ internal sealed class LogWindow : Form
         var panel = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 34,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Padding = new Padding(6, 6, 6, 0),
+            Padding = new Padding(6),
+            Margin = new Padding(0),
         };
 
         _level = new ComboBox

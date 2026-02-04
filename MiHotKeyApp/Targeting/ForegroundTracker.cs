@@ -5,7 +5,7 @@ using MiHotKeyApp.Native;
 internal sealed class ForegroundTracker : IDisposable
 {
     private readonly object _gate = new();
-    private readonly nint[] _history;
+    private nint[] _history;
     private int _next;
     private int _count;
 
@@ -17,6 +17,8 @@ internal sealed class ForegroundTracker : IDisposable
         _history = new nint[Math.Max(2, capacity)];
         _cb = OnWinEvent;
     }
+
+    public bool IsEnabled => _hook != 0;
 
     public void Start()
     {
@@ -33,6 +35,37 @@ internal sealed class ForegroundTracker : IDisposable
             0,
             0,
             User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
+    }
+
+    public void Stop()
+    {
+        if (_hook == 0)
+        {
+            return;
+        }
+
+        User32.UnhookWinEvent(_hook);
+        _hook = 0;
+        ClearHistory();
+    }
+
+    public void Configure(bool enabled, int capacity)
+    {
+        lock (_gate)
+        {
+            _history = new nint[Math.Max(2, capacity)];
+            _next = 0;
+            _count = 0;
+        }
+
+        if (enabled && capacity > 0)
+        {
+            Start();
+        }
+        else
+        {
+            Stop();
+        }
     }
 
     public (nint Foreground, nint Previous) GetForegroundAndPrevious()
@@ -52,7 +85,7 @@ internal sealed class ForegroundTracker : IDisposable
                 }
 
                 var h = _history[idx];
-                if (h != 0 && h != fg)
+                if (h != 0 && h != fg && !IsIgnoredWindow(h))
                 {
                     prev = h;
                     break;
@@ -65,7 +98,7 @@ internal sealed class ForegroundTracker : IDisposable
 
     private void OnWinEvent(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
-        if (hwnd == 0)
+        if (hwnd == 0 || IsIgnoredWindow(hwnd))
         {
             return;
         }
@@ -78,13 +111,42 @@ internal sealed class ForegroundTracker : IDisposable
         }
     }
 
-    public void Dispose()
+    private void ClearHistory()
     {
-        if (_hook != 0)
+        lock (_gate)
         {
-            User32.UnhookWinEvent(_hook);
-            _hook = 0;
+            Array.Clear(_history);
+            _next = 0;
+            _count = 0;
         }
     }
-}
 
+    private static bool IsIgnoredWindow(nint hwnd)
+    {
+        if (hwnd == 0 || !User32.IsWindow(hwnd))
+        {
+            return true;
+        }
+
+        var cls = User32.GetWindowClassName(hwnd);
+        if (cls.Length == 0)
+        {
+            return false;
+        }
+
+        // Taskbar and system UI surfaces.
+        return cls.Equals("Shell_TrayWnd", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("TaskListThumbnailWnd", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("MultitaskingViewFrame", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("XamlExplorerHostIslandWindow", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("Progman", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("WorkerW", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        Stop();
+    }
+}

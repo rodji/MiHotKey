@@ -34,6 +34,7 @@ internal sealed class AppRuntime : IDisposable
 
     private AppConfig _config;
     private string _resolvedConfigPath;
+    private bool? _foregroundTrackingOverride;
 
     public AppRuntime(string baseDir, SynchronizationContext ui)
     {
@@ -79,6 +80,7 @@ internal sealed class AppRuntime : IDisposable
     public RingLogBuffer LogBuffer => _logBuffer;
     public ILoggerFactory LoggerFactory => _loggerFactory;
     public TraySection Tray => _config.Tray;
+    public bool ForegroundTrackingEnabled => _foreground.IsEnabled;
 
     public void Start()
     {
@@ -107,6 +109,7 @@ internal sealed class AppRuntime : IDisposable
             }
 
             ApplyConfig(loaded, resolved);
+            _foregroundTrackingOverride = null;
             if (loaded.Logging.ShowConfigPathsInLog)
             {
                 _logConfig.LogInformation("reload ok path=\"{path}\" alt=\"{alt}\"", resolved, loaded.App.AltConfigPathHint);
@@ -134,6 +137,9 @@ internal sealed class AppRuntime : IDisposable
         _config = cfg;
         _resolvedConfigPath = resolvedPath;
 
+        var effectiveTrackingEnabled = _foregroundTrackingOverride ?? cfg.App.ForegroundTrackingEnabled;
+        _foreground.Configure(effectiveTrackingEnabled, cfg.App.ForegroundHistorySize);
+
         _logProvider.UpdateConfig(cfg.Logging);
         _logBuffer.Resize(cfg.App.LogBufferSize);
 
@@ -144,6 +150,13 @@ internal sealed class AppRuntime : IDisposable
     private void OnTrigger(string triggerId)
     {
         _router.HandleTrigger(triggerId);
+    }
+
+    public void SetForegroundTrackingEnabled(bool enabled)
+    {
+        _foregroundTrackingOverride = enabled;
+        _foreground.Configure(enabled, _config.App.ForegroundHistorySize);
+        _logConfig.LogInformation("foregroundTracking enabled={enabled}", enabled ? 1 : 0);
     }
 
     public void Dispose()

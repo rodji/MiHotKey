@@ -6,6 +6,8 @@
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
 
     "logBufferSize": 100,
+    "foregroundTrackingEnabled": true,
+    "foregroundHistorySize": 10,
     "targetSelectionMode": "ForegroundThenPrevious",
     "focusPolicy": "ActivateTargetTemporarily",
 
@@ -19,6 +21,7 @@
   "tray": {
     "reloadConfig": true,
     "showLog": true,
+    "toggleForegroundTracking": true,
     "exit": true
   },
 
@@ -133,6 +136,17 @@
     "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "vk" }
   },
 
+  "routesByTrigger": {
+    "mute": [
+      { "rule": "meet",     "shortcut": "meet.mute" },
+      { "rule": "teams",    "shortcut": "teams.mute" },
+      { "rule": "telegram", "shortcut": "telegram.mute" },
+      { "rule": "viber",    "shortcut": "viber.mute" },
+      { "rule": "whatsapp", "shortcut": "whatsapp.mute" },
+      { "rule": "discord",  "shortcut": "discord.mute" }
+    ]
+  },
+
   "routes": [
     { "rule": "meet",     "shortcut": "meet.mute" },
     { "rule": "teams",    "shortcut": "teams.mute" },
@@ -142,4 +156,3 @@
     { "rule": "discord",  "shortcut": "discord.mute" }
   ]
 }
-

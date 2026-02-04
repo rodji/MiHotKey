@@ -17,6 +17,11 @@ internal static class ConfigValidator
             throw new InvalidDataException("app.logBufferSize must be between 10 and 10000");
         }
 
+        if (cfg.App.ForegroundHistorySize < 0 || cfg.App.ForegroundHistorySize > 1000)
+        {
+            throw new InvalidDataException("app.foregroundHistorySize must be between 0 and 1000");
+        }
+
         var ruleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var rule in cfg.Targets.Rules)
         {
@@ -55,6 +60,45 @@ internal static class ConfigValidator
             if (!shortcuts.Contains(route.Shortcut))
             {
                 throw new InvalidDataException($"routes shortcut not found: {route.Shortcut}");
+            }
+        }
+
+        var triggerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var hotkey in cfg.Inputs.Hotkeys)
+        {
+            if (!string.IsNullOrWhiteSpace(hotkey.Id))
+            {
+                triggerIds.Add(hotkey.Id);
+            }
+        }
+        foreach (var binding in cfg.Bindings.Keys)
+        {
+            triggerIds.Add(binding);
+        }
+
+        foreach (var (trigger, routes) in cfg.RoutesByTrigger)
+        {
+            if (string.IsNullOrWhiteSpace(trigger))
+            {
+                throw new InvalidDataException("routesByTrigger keys must not be empty");
+            }
+
+            if (!triggerIds.Contains(trigger))
+            {
+                throw new InvalidDataException($"routesByTrigger trigger not found in inputs/bindings: {trigger}");
+            }
+
+            foreach (var route in routes)
+            {
+                if (!ruleIds.Contains(route.Rule))
+                {
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] rule not found: {route.Rule}");
+                }
+
+                if (!shortcuts.Contains(route.Shortcut))
+                {
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] shortcut not found: {route.Shortcut}");
+                }
             }
         }
 

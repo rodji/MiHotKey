@@ -31,6 +31,9 @@ internal sealed class AppConfig
 
     [JsonPropertyName("routes")]
     public RouteConfig[] Routes { get; init; } = [];
+
+    [JsonPropertyName("routesByTrigger")]
+    public Dictionary<string, RouteConfig[]> RoutesByTrigger { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class AppSection
@@ -43,6 +46,12 @@ internal sealed class AppSection
 
     [JsonPropertyName("logBufferSize")]
     public int LogBufferSize { get; init; } = 100;
+
+    [JsonPropertyName("foregroundTrackingEnabled")]
+    public bool ForegroundTrackingEnabled { get; init; } = true;
+
+    [JsonPropertyName("foregroundHistorySize")]
+    public int ForegroundHistorySize { get; init; } = 10;
 
     [JsonPropertyName("targetSelectionMode")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -91,6 +100,9 @@ internal sealed class TraySection
 
     [JsonPropertyName("exit")]
     public bool Exit { get; init; } = true;
+
+    [JsonPropertyName("toggleForegroundTracking")]
+    public bool ToggleForegroundTracking { get; init; } = true;
 }
 
 internal sealed class LoggingSection
@@ -211,4 +223,3 @@ internal sealed class RouteConfig
     [JsonPropertyName("shortcut")]
     public string Shortcut { get; init; } = "";
 }
-
