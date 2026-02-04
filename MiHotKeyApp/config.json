@@ -1,0 +1,145 @@
+{
+  "version": 1,
+
+  "app": {
+    "configPath": ".\\config.json",
+    "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
+
+    "logBufferSize": 100,
+    "targetSelectionMode": "ForegroundThenPrevious",
+    "focusPolicy": "ActivateTargetTemporarily",
+
+    "sendTimingMs": {
+      "modDownToKeyDown": 5,
+      "keyDownToKeyUp": 2,
+      "keyUpToModUp": 2
+    }
+  },
+
+  "tray": {
+    "reloadConfig": true,
+    "showLog": true,
+    "exit": true
+  },
+
+  "logging": {
+    "level": "Information",
+    "overrides": {
+      "Target": "Debug",
+      "Match": "Debug",
+      "Send": "Debug",
+      "Config": "Information"
+    },
+    "includeScopes": false,
+    "maxMessageLength": 300,
+    "showConfigPathsInLog": true
+  },
+
+  "inputs": {
+    "hotkeys": [
+      { "id": "mute", "keys": "Ctrl+Alt+M" }
+    ],
+
+    "wmi": [
+      {
+        "id": "tma",
+        "namespace": "root\\wmi",
+        "query": "SELECT * FROM TMA_WMIEvent",
+
+        "where": { "InstanceName": "ACPI\\PNP0C14\\0x2_0" },
+
+        "extract": { "prop": "EventDetail", "index": 2 },
+
+        "map": {
+          "1": "triangle.down",
+          "6": "triangle.up",
+
+          "2": "hexagon.down",
+          "7": "hexagon.up",
+
+          "3": "circle.down",
+          "8": "circle.up",
+
+          "4": "droplett.down",
+          "9": "droplett.up",
+
+          "5": "square.down",
+          "10": "square.up"
+        },
+
+        "repeatHandling": "firstDownOnlyUntilUp",
+        "debounceMs": 40
+      }
+    ]
+  },
+
+  "bindings": {
+    "mute": [
+      "triangle.down",
+      "hexagon.down",
+      "circle.down",
+      "droplett.down",
+      "square.down"
+    ]
+  },
+
+  "targets": {
+    "rules": [
+      {
+        "id": "meet",
+        "prio": 100,
+        "proc": [ "chrome", "msedge" ],
+        "titleHas": [ "Meet", "Google Meet", "meet.google.com" ]
+      },
+      {
+        "id": "teams",
+        "prio": 95,
+        "proc": [ "ms-teams", "teams", "msteams" ],
+        "titleHas": [ "Teams", "Microsoft Teams" ]
+      },
+      {
+        "id": "telegram",
+        "prio": 80,
+        "proc": [ "telegram" ],
+        "titleHas": [ "Telegram" ]
+      },
+      {
+        "id": "viber",
+        "prio": 75,
+        "proc": [ "viber" ],
+        "titleHas": [ "Viber" ]
+      },
+      {
+        "id": "whatsapp",
+        "prio": 70,
+        "proc": [ "whatsapp" ],
+        "titleHas": [ "WhatsApp" ]
+      },
+      {
+        "id": "discord",
+        "prio": 60,
+        "proc": [ "chrome" ],
+        "titleHas": [ "Discord" ]
+      }
+    ]
+  },
+
+  "shortcuts": {
+    "meet.mute":     { "keys": "Ctrl+D",       "send": "scan" },
+    "teams.mute":    { "keys": "Ctrl+Shift+M", "send": "scan" },
+    "telegram.mute": { "keys": "Ctrl+M",       "send": "scan" },
+    "viber.mute":    { "keys": "Ctrl+M",       "send": "scan" },
+    "whatsapp.mute": { "keys": "Ctrl+Shift+M", "send": "vk" },
+    "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "vk" }
+  },
+
+  "routes": [
+    { "rule": "meet",     "shortcut": "meet.mute" },
+    { "rule": "teams",    "shortcut": "teams.mute" },
+    { "rule": "telegram", "shortcut": "telegram.mute" },
+    { "rule": "viber",    "shortcut": "viber.mute" },
+    { "rule": "whatsapp", "shortcut": "whatsapp.mute" },
+    { "rule": "discord",  "shortcut": "discord.mute" }
+  ]
+}
+
