@@ -32,6 +32,9 @@ internal sealed class AppConfig
     [JsonPropertyName("programs")]
     public Dictionary<string, ProgramConfig> Programs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    [JsonPropertyName("audioDevices")]
+    public Dictionary<string, AudioDeviceConfig> AudioDevices { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
     [JsonPropertyName("routesByTrigger")]
     public Dictionary<string, RouteConfig[]> RoutesByTrigger { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -268,6 +271,7 @@ internal enum RouteActionType
 {
     Shortcut,
     Program,
+    Audio,
 }
 
 internal sealed class ProgramConfig
@@ -295,4 +299,42 @@ internal sealed class ProgramConfig
 
     [JsonPropertyName("env")]
     public Dictionary<string, string> Env { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+internal sealed class AudioDeviceConfig
+{
+    [JsonPropertyName("flow")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AudioFlow Flow { get; init; } = AudioFlow.Capture;
+
+    [JsonPropertyName("role")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AudioRole Role { get; init; } = AudioRole.Communications;
+
+    [JsonPropertyName("deviceId")]
+    public string DeviceId { get; init; } = "";
+
+    [JsonPropertyName("action")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AudioAction Action { get; init; } = AudioAction.ToggleMute;
+}
+
+internal enum AudioFlow
+{
+    Render,
+    Capture,
+}
+
+internal enum AudioRole
+{
+    Console,
+    Multimedia,
+    Communications,
+}
+
+internal enum AudioAction
+{
+    ToggleMute,
+    Mute,
+    Unmute,
 }

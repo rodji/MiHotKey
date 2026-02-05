@@ -1,6 +1,7 @@
 namespace MiHotKeyApp.Routing;
 
 using MiHotKeyApp.Config;
+using MiHotKeyApp.Audio;
 using MiHotKeyApp.Execution;
 using MiHotKeyApp.Logging;
 using MiHotKeyApp.Native;
@@ -14,6 +15,7 @@ internal sealed class Router
     private readonly ILogger _logMatch;
     private readonly ILogger _logSend;
     private readonly ILogger _logExec;
+    private readonly ILogger _logAudio;
 
     private readonly TargetSelector _selector;
     private readonly WindowInfoProvider _info;
@@ -21,10 +23,12 @@ internal sealed class Router
     private readonly FocusController _focus;
     private readonly KeySender _sender;
     private readonly ProgramRunner _programRunner;
+    private readonly AudioDeviceManager _audio;
 
     private readonly Dictionary<string, Dictionary<string, (RouteActionType Type, string Id)>> _routesByTrigger = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, (ParsedShortcut Shortcut, SendMode Mode)> _shortcuts = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ProgramConfig> _programs = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, AudioDeviceConfig> _audioDevices = new(StringComparer.OrdinalIgnoreCase);
 
     private TargetSelectionMode _mode = TargetSelectionMode.ForegroundThenPrevious;
     private FocusPolicy _focusPolicy = FocusPolicy.ActivateTargetTemporarily;
@@ -43,12 +47,14 @@ internal sealed class Router
         WindowRuleMatcher matcher,
         FocusController focus,
         KeySender sender,
-        ProgramRunner programRunner)
+        ProgramRunner programRunner,
+        AudioDeviceManager audio)
     {
         _logTarget = loggerFactory.CreateLogger(LogCategories.Target);
         _logMatch = loggerFactory.CreateLogger(LogCategories.Match);
         _logSend = loggerFactory.CreateLogger(LogCategories.Send);
         _logExec = loggerFactory.CreateLogger(LogCategories.Exec);
+        _logAudio = loggerFactory.CreateLogger(LogCategories.Audio);
 
         _selector = selector;
         _info = info;
@@ -56,6 +62,7 @@ internal sealed class Router
         _focus = focus;
         _sender = sender;
         _programRunner = programRunner;
+        _audio = audio;
     }
 
     public void ApplyConfig(AppConfig cfg)
@@ -88,6 +95,7 @@ internal sealed class Router
             StringComparer.OrdinalIgnoreCase);
 
         _programs = new Dictionary<string, ProgramConfig>(cfg.Programs, StringComparer.OrdinalIgnoreCase);
+        _audioDevices = new Dictionary<string, AudioDeviceConfig>(cfg.AudioDevices, StringComparer.OrdinalIgnoreCase);
     }
 
     public void HandleTrigger(string triggerId)
@@ -141,6 +149,19 @@ internal sealed class Router
 
             _logExec.LogInformation("trigger={trigger} rule=any program={program}", triggerId, action.Id);
             _ = _programRunner.TryStart(action.Id, program, context: $"trigger={triggerId} rule=<any>");
+            return true;
+        }
+
+        if (action.Type == RouteActionType.Audio)
+        {
+            if (!_audioDevices.TryGetValue(action.Id, out var audio))
+            {
+                _logMatch.LogInformation("trigger={trigger} rule=any audio={audio} missing=1", triggerId, action.Id);
+                return true;
+            }
+
+            _logAudio.LogInformation("trigger={trigger} rule=any audio={audio}", triggerId, action.Id);
+            _ = _audio.Execute(action.Id, audio, context: $"trigger={triggerId} rule=<any>");
             return true;
         }
 
@@ -217,6 +238,11 @@ internal sealed class Router
             return ExecuteProgram(triggerId, rule, action.Id, hwnd);
         }
 
+        if (action.Type == RouteActionType.Audio)
+        {
+            return ExecuteAudio(triggerId, rule, action.Id, hwnd);
+        }
+
         _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} actionType={type} unsupported=1", triggerId, rule.Id, rule.Prio, action.Type);
         return true;
     }
@@ -270,6 +296,19 @@ internal sealed class Router
 
         _logExec.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program}", triggerId, rule.Id, rule.Prio, programId);
         _ = _programRunner.TryStart(programId, program, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
+        return true;
+    }
+
+    private bool ExecuteAudio(string triggerId, TargetRuleConfig rule, string audioId, nint hwnd)
+    {
+        if (!_audioDevices.TryGetValue(audioId, out var audio))
+        {
+            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} audio={audio} missing=1", triggerId, rule.Id, rule.Prio, audioId);
+            return true;
+        }
+
+        _logAudio.LogInformation("trigger={trigger} rule={rule} prio={prio} audio={audio}", triggerId, rule.Id, rule.Prio, audioId);
+        _ = _audio.Execute(audioId, audio, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
         return true;
     }
 

@@ -50,6 +50,7 @@ internal static class ConfigValidator
         }
 
         var programs = new HashSet<string>(cfg.Programs.Keys, StringComparer.OrdinalIgnoreCase);
+        var audioDevices = new HashSet<string>(cfg.AudioDevices.Keys, StringComparer.OrdinalIgnoreCase);
         foreach (var (id, prog) in cfg.Programs)
         {
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(prog.File))
@@ -60,6 +61,14 @@ internal static class ConfigValidator
             if (prog.UseShellExecute && prog.Env.Count > 0)
             {
                 throw new InvalidDataException($"programs['{id}'] has useShellExecute=true but also sets env; env is only supported when useShellExecute=false");
+            }
+        }
+
+        foreach (var (id, audio) in cfg.AudioDevices)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new InvalidDataException("audioDevices entries must have non-empty id");
             }
         }
 
@@ -110,6 +119,11 @@ internal static class ConfigValidator
                 if (route.ActionType == RouteActionType.Program && !programs.Contains(route.ActionId))
                 {
                     throw new InvalidDataException($"routesByTrigger['{trigger}'] program not found: {route.ActionId}");
+                }
+
+                if (route.ActionType == RouteActionType.Audio && !audioDevices.Contains(route.ActionId))
+                {
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] audio device not found: {route.ActionId}");
                 }
             }
         }

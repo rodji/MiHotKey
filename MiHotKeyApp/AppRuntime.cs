@@ -1,6 +1,7 @@
 namespace MiHotKeyApp;
 
 using MiHotKeyApp.Config;
+using MiHotKeyApp.Audio;
 using MiHotKeyApp.Execution;
 using MiHotKeyApp.Input;
 using MiHotKeyApp.Input.Hotkey;
@@ -31,6 +32,7 @@ internal sealed class AppRuntime : IDisposable
     private readonly FocusController _focus;
     private readonly KeySender _sender;
     private readonly ProgramRunner _programRunner;
+    private readonly AudioDeviceManager _audio;
     private readonly Router _router;
 
     private readonly GlobalHotkeySource _hotkeys;
@@ -68,6 +70,7 @@ internal sealed class AppRuntime : IDisposable
         _focus = new FocusController();
         _sender = new KeySender(_loggerFactory.CreateLogger(LogCategories.Send));
         _programRunner = new ProgramRunner(baseDir, _loggerFactory.CreateLogger(LogCategories.Exec));
+        _audio = new AudioDeviceManager(_loggerFactory.CreateLogger(LogCategories.Audio));
         _router = new Router(
             _loggerFactory,
             _selector,
@@ -75,7 +78,8 @@ internal sealed class AppRuntime : IDisposable
             _matcher,
             _focus,
             _sender,
-            _programRunner);
+            _programRunner,
+            _audio);
 
         _hotkeys = new GlobalHotkeySource(_loggerFactory.CreateLogger(LogCategories.InputHotkey));
         _wmi = new WmiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputWmi), _session);

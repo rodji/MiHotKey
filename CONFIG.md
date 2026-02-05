@@ -12,6 +12,7 @@
 - В `targets.rules` добавлены опции матчинга по классу окна (`classIs`) и заголовку окна (`title`, glob-паттерны).
 - В `inputs.wmi` добавлены политики “разрешать ли триггеры при lock/remote” (`sessionPolicy`, `sessionPolicyByEvent`).
 - В `routesByTrigger` поддержано “без правила” (пустой/отсутствующий `rule`) — безусловное действие.
+- Добавлены `audioDevices` и `routesByTrigger.actionType = "Audio"` для управления mute микрофона/динамиков.
 
 ## Как выбирается файл конфига
 
@@ -33,6 +34,7 @@
 - `targets` — правила поиска целевого окна.
 - `shortcuts` — словарь сочетаний клавиш для отправки.
 - `programs` — словарь программ, которые можно запускать.
+- `audioDevices` — действия с аудиоустройствами (mute/unmute/toggle).
 - `routesByTrigger` — что делать для каждой пары (trigger, rule).
 
 ## `app`
@@ -250,6 +252,43 @@ WMI-источник генерирует “события” (строки), �
 
 В лог пишется: старт, завершение, `exit code`, stdout/stderr (обрезаются до разумного размера).
 
+## `audioDevices`
+
+Действия над аудиоустройствами через Core Audio (Windows).
+
+```jsonc
+{
+  "audioDevices": {
+    "mic.toggle": {
+      "flow": "Capture",
+      "role": "Communications",
+      "deviceId": "",
+      "action": "ToggleMute"
+    }
+  }
+}
+```
+
+Поля:
+
+- `flow` — тип потока:
+  - `Capture` — микрофоны (input).
+  - `Render` — динамики/наушники (output).
+- `role` — роль девайса:
+  - `Console` — “обычное” устройство по умолчанию.
+  - `Multimedia` — мультимедийное.
+  - `Communications` — коммуникационное (часто используют Teams/Zoom).
+- `deviceId` — конкретный ID устройства (строка Windows). Если пусто — берется default по `flow`+`role`.
+- `action`:
+  - `ToggleMute` — переключить mute,
+  - `Mute` — включить mute,
+  - `Unmute` — отключить mute.
+
+Примечания:
+
+- Если `deviceId` задан, `role` игнорируется.
+- Мут применяется на уровне устройства, это влияет на все приложения, использующие этот девайс.
+
 ## `routesByTrigger`
 
 Главная таблица маршрутизации: для каждого `triggerId` задается список правил, и для каждого правила — действие.
@@ -272,7 +311,8 @@ WMI-источник генерирует “события” (строки), �
 - `actionType`:
   - `Shortcut` — отправить `shortcuts[actionId]`.
   - `Program` — запустить `programs[actionId]`.
-- `actionId` — id действия (ключ в `shortcuts` или `programs`).
+  - `Audio` — выполнить действие из `audioDevices[actionId]`.
+- `actionId` — id действия (ключ в `shortcuts`, `programs` или `audioDevices`).
 
 Важно:
 
