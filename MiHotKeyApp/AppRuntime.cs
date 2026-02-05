@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 internal sealed class AppRuntime : IDisposable
 {
     private readonly string _baseDir;
-    private readonly ConfigLoader _loader;
+    private readonly ConfigStore _configStore;
     private readonly RingLogBuffer _logBuffer;
     private readonly RingBufferLoggerProvider _logProvider;
     private readonly ILoggerFactory _loggerFactory;
@@ -44,7 +44,7 @@ internal sealed class AppRuntime : IDisposable
     public AppRuntime(string baseDir, SynchronizationContext ui)
     {
         _baseDir = baseDir;
-        _loader = new ConfigLoader(baseDir);
+        _configStore = new ConfigStore(baseDir);
 
         _logBuffer = new RingLogBuffer(100);
         _logProvider = new RingBufferLoggerProvider(_logBuffer, new LoggingSection());
@@ -117,12 +117,12 @@ internal sealed class AppRuntime : IDisposable
         try
         {
             var primaryPath = Path.Combine(_baseDir, "config.json");
-            var loaded = _loader.LoadFromPath(primaryPath);
-            var resolved = _loader.ResolveConfigPath(loaded.App.ConfigPath);
+            var loaded = _configStore.LoadFromPath(primaryPath);
+            var resolved = _configStore.ResolveConfigPath(loaded.App.ConfigPath);
 
             if (!string.Equals(resolved, primaryPath, StringComparison.OrdinalIgnoreCase))
             {
-                loaded = _loader.LoadFromPath(resolved);
+                loaded = _configStore.LoadFromPath(resolved);
             }
 
             ApplyConfig(loaded, resolved);
@@ -191,38 +191,13 @@ internal sealed class AppRuntime : IDisposable
             return;
         }
 
-        try
+        if (_configStore.TrySetAutostartEnabled(_resolvedConfigPath, enabled, out var error))
         {
-            var json = File.ReadAllText(_resolvedConfigPath);
-            var opts = new System.Text.Json.JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
-            };
-
-            var node = System.Text.Json.Nodes.JsonNode.Parse(json, documentOptions: opts);
-            if (node is not System.Text.Json.Nodes.JsonObject root)
-            {
-                throw new InvalidDataException("Config root must be an object");
-            }
-
-            var app = root["app"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
-            root["app"] = app;
-
-            var autostart = app["autostart"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
-            app["autostart"] = autostart;
-
-            autostart["enabled"] = enabled;
-
-            var outJson = root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_resolvedConfigPath, outJson + Environment.NewLine);
-
             ReloadConfig();
+            return;
         }
-        catch (Exception ex)
-        {
-            _logConfig.LogError(ex, "autostart toggle failed enabled={enabled} path=\"{path}\"", enabled ? 1 : 0, _resolvedConfigPath);
-        }
+
+        _logConfig.LogError("autostart toggle failed enabled={enabled} path=\"{path}\" err=\"{err}\"", enabled ? 1 : 0, _resolvedConfigPath, error ?? "");
     }
 
     public void Dispose()
