@@ -19,6 +19,10 @@
 
     "autostart": {
       "enabled": false
+    },
+
+    "diagnostics": {
+      "sortByTabOrder": false
     }
   },
 
@@ -26,6 +30,7 @@
     "reloadConfig": true,
     "showLog": true,
     "toggleForegroundTracking": true,
+    "runDiagnostics": true,
     "exit": true
   },
 

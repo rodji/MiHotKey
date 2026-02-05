@@ -13,6 +13,7 @@
 - В `inputs.wmi` добавлены политики “разрешать ли триггеры при lock/remote” (`sessionPolicy`, `sessionPolicyByEvent`).
 - В `routesByTrigger` поддержано “без правила” (пустой/отсутствующий `rule`) — безусловное действие.
 - Добавлены `audioDevices` и `routesByTrigger.actionType = "Audio"` для управления mute микрофона/динамиков.
+- Добавлены диагностика и пункт tray-меню **Run diagnostics** (логирует окна/аудио/foreground-tracker).
 
 ## Как выбирается файл конфига
 
@@ -50,7 +51,8 @@
     "targetSelectionMode": "ForegroundThenPrevious",
     "focusPolicy": "ActivateTargetTemporarily",
     "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
-    "autostart": { "enabled": false }
+    "autostart": { "enabled": false },
+    "diagnostics": { "sortByTabOrder": false }
   }
 }
 ```
@@ -71,14 +73,19 @@
 - `autostart.enabled` — включить автозапуск при входе пользователя в Windows.
   - Реализация: запись в `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` значения `MiHotKey` со строкой запуска текущего `.exe`.
   - Можно переключать из tray-меню **Autostart** — приложение обновит `config.json` и перезагрузит конфиг.
+- `diagnostics.sortByTabOrder` — порядок вывода top-level окон в диагностике:
+  - `true` — порядок Z (как вкладки Alt-Tab),
+  - `false` — сортировка по `proc`/`title`.
 
 ## `tray`
 
 Управляет видимостью пунктов меню.
 
 ```jsonc
-{ "tray": { "reloadConfig": true, "showLog": true, "toggleForegroundTracking": true, "exit": true } }
+{ "tray": { "reloadConfig": true, "showLog": true, "toggleForegroundTracking": true, "runDiagnostics": true, "exit": true } }
 ```
+
+- `runDiagnostics` — показать пункт **Run diagnostics** (логирует top-level окна, аудиоустройства и состояние foreground-tracker).
 
 ## `logging`
 

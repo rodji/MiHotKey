@@ -69,12 +69,21 @@ internal sealed class AppSection
 
     [JsonPropertyName("autostart")]
     public AutostartSection Autostart { get; init; } = new();
+
+    [JsonPropertyName("diagnostics")]
+    public DiagnosticsSection Diagnostics { get; init; } = new();
 }
 
 internal sealed class AutostartSection
 {
     [JsonPropertyName("enabled")]
     public bool Enabled { get; init; }
+}
+
+internal sealed class DiagnosticsSection
+{
+    [JsonPropertyName("sortByTabOrder")]
+    public bool SortByTabOrder { get; init; }
 }
 
 internal sealed class SendTimingMsSection
@@ -115,6 +124,9 @@ internal sealed class TraySection
 
     [JsonPropertyName("toggleForegroundTracking")]
     public bool ToggleForegroundTracking { get; init; } = true;
+
+    [JsonPropertyName("runDiagnostics")]
+    public bool RunDiagnostics { get; init; } = true;
 }
 
 internal sealed class LoggingSection

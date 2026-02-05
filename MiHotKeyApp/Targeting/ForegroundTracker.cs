@@ -96,6 +96,31 @@ internal sealed class ForegroundTracker : IDisposable
         return (fg, prev);
     }
 
+    public nint[] GetHistorySnapshot()
+    {
+        lock (_gate)
+        {
+            if (_count == 0)
+            {
+                return [];
+            }
+
+            var list = new nint[_count];
+            for (var i = 0; i < _count; i++)
+            {
+                var idx = _next - 1 - i;
+                if (idx < 0)
+                {
+                    idx += _history.Length;
+                }
+
+                list[i] = _history[idx];
+            }
+
+            return list;
+        }
+    }
+
     private void OnWinEvent(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
         if (hwnd == 0 || IsIgnoredWindow(hwnd))

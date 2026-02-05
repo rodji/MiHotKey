@@ -34,6 +34,7 @@ internal static class Program
             runtime.SetAutostartEnabled(enabled);
             tray.SetAutostartChecked(runtime.AutostartEnabled);
         };
+        tray.DiagnosticsRequested += () => runtime.RunDiagnostics();
         tray.ProgramRunRequested += programId => runtime.RunProgram(programId);
 
         Application.Run(tray);

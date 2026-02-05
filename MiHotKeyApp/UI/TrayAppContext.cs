@@ -10,6 +10,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly ToolStripMenuItem _reload;
     private readonly ToolStripMenuItem _showLog;
     private readonly ToolStripMenuItem _runPrograms;
+    private readonly ToolStripMenuItem _runDiagnostics;
     private readonly ToolStripMenuItem _toggleForegroundTracking;
     private readonly ToolStripMenuItem _toggleAutostart;
     private readonly ToolStripMenuItem _exit;
@@ -41,6 +42,10 @@ internal sealed class TrayAppContext : ApplicationContext
         _runPrograms = new ToolStripMenuItem("Run");
         menu.Items.Add(_runPrograms);
 
+        _runDiagnostics = new ToolStripMenuItem("Run diagnostics");
+        _runDiagnostics.Click += (_, __) => DiagnosticsRequested?.Invoke();
+        menu.Items.Add(_runDiagnostics);
+
         _toggleForegroundTracking = new ToolStripMenuItem("Foreground tracking")
         {
             CheckOnClick = true,
@@ -70,6 +75,7 @@ internal sealed class TrayAppContext : ApplicationContext
     public event Action<bool>? ForegroundTrackingToggled;
     public event Action<string>? ProgramRunRequested;
     public event Action<bool>? AutostartToggled;
+    public event Action? DiagnosticsRequested;
 
     public void ApplyTrayConfig(TraySection tray)
     {
@@ -77,6 +83,7 @@ internal sealed class TrayAppContext : ApplicationContext
         _showLog.Visible = tray.ShowLog;
         _exit.Visible = tray.Exit;
         _toggleForegroundTracking.Visible = tray.ToggleForegroundTracking;
+        _runDiagnostics.Visible = tray.RunDiagnostics;
     }
 
     public void ApplyPrograms((string Id, string Title)[] programs)

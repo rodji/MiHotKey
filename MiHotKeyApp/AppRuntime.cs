@@ -21,6 +21,7 @@ internal sealed class AppRuntime : IDisposable
     private readonly ILoggerFactory _loggerFactory;
 
     private readonly ILogger _logConfig;
+    private readonly ILogger _logDiag;
 
     private readonly SessionState _session;
     private readonly AutostartManager _autostart;
@@ -57,6 +58,7 @@ internal sealed class AppRuntime : IDisposable
         });
 
         _logConfig = _loggerFactory.CreateLogger(LogCategories.Config);
+        _logDiag = _loggerFactory.CreateLogger(LogCategories.Diag);
 
         _session = new SessionState(_loggerFactory.CreateLogger(LogCategories.Config));
         _autostart = new AutostartManager(_loggerFactory.CreateLogger(LogCategories.Config));
@@ -202,6 +204,97 @@ internal sealed class AppRuntime : IDisposable
         }
 
         _logConfig.LogError("autostart toggle failed enabled={enabled} path=\"{path}\" err=\"{err}\"", enabled ? 1 : 0, _resolvedConfigPath, error ?? "");
+    }
+
+    public void RunDiagnostics()
+    {
+        try
+        {
+            _logDiag.LogInformation("diagnostics start");
+            LogForegroundTracking();
+            LogTopLevelWindows();
+            LogAudioDevices();
+            _logDiag.LogInformation("diagnostics end");
+        }
+        catch (Exception ex)
+        {
+            _logDiag.LogError(ex, "diagnostics failed");
+        }
+    }
+
+    private void LogForegroundTracking()
+    {
+        _logDiag.LogInformation("foregroundTracking enabled={enabled}", _foreground.IsEnabled ? 1 : 0);
+
+        var (fg, prev) = _foreground.GetForegroundAndPrevious();
+        if (fg != 0)
+        {
+            var wi = _windowInfo.GetInfo(fg);
+            _logDiag.LogInformation("foreground hwnd=0x{hwnd:X} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.ProcessName, wi.ClassName, wi.Title);
+        }
+
+        if (prev != 0)
+        {
+            var wi = _windowInfo.GetInfo(prev);
+            _logDiag.LogInformation("previous hwnd=0x{hwnd:X} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.ProcessName, wi.ClassName, wi.Title);
+        }
+
+        var history = _foreground.GetHistorySnapshot();
+        _logDiag.LogInformation("foreground history count={count}", history.Length);
+        foreach (var hwnd in history)
+        {
+            if (hwnd == 0)
+            {
+                continue;
+            }
+
+            var wi = _windowInfo.GetInfo(hwnd);
+            _logDiag.LogInformation("history hwnd=0x{hwnd:X} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.ProcessName, wi.ClassName, wi.Title);
+        }
+    }
+
+    private void LogTopLevelWindows()
+    {
+        var list = _windowInfo.GetTopLevelWindows()
+            .Select(hwnd => _windowInfo.GetInfo(hwnd))
+            .Where(w => w.Hwnd != 0)
+            .ToList();
+
+        if (!_config.App.Diagnostics.SortByTabOrder)
+        {
+            list = list
+                .OrderBy(w => w.ProcessName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(w => w.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        _logDiag.LogInformation("top windows count={count} order={order}", list.Count, _config.App.Diagnostics.SortByTabOrder ? "tab" : "sorted");
+        foreach (var wi in list)
+        {
+            _logDiag.LogInformation("top hwnd=0x{hwnd:X} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.ProcessName, wi.ClassName, wi.Title);
+        }
+    }
+
+    private void LogAudioDevices()
+    {
+        var devices = _audio.GetDevicesSnapshot();
+        _logDiag.LogInformation("audio devices count={count}", devices.Length);
+        foreach (var d in devices)
+        {
+            _logDiag.LogInformation(
+                "audio flow={flow} id=\"{id}\" name=\"{name}\" defaultConsole={console} defaultMultimedia={multi} defaultComms={comms}",
+                d.Flow,
+                d.Id,
+                d.Name,
+                d.IsDefaultConsole ? 1 : 0,
+                d.IsDefaultMultimedia ? 1 : 0,
+                d.IsDefaultCommunications ? 1 : 0);
+
+            _logDiag.LogInformation(
+                "audio config flow={flow} role=Communications deviceId=\"{id}\" action=ToggleMute",
+                d.Flow,
+                d.Id);
+        }
     }
 
     public void Dispose()

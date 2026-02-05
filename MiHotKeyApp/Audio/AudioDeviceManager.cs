@@ -13,6 +13,33 @@ internal sealed class AudioDeviceManager
         _logger = logger;
     }
 
+    public AudioDeviceInfo[] GetDevicesSnapshot()
+    {
+        var list = new List<AudioDeviceInfo>();
+
+        var enumerator = CreateEnumerator();
+        if (enumerator is null)
+        {
+            return list.ToArray();
+        }
+
+        try
+        {
+            AddDevicesForFlow(enumerator, EDataFlow.eCapture, AudioFlow.Capture, list);
+            AddDevicesForFlow(enumerator, EDataFlow.eRender, AudioFlow.Render, list);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "audio diagnostics failed");
+        }
+        finally
+        {
+            Release(enumerator);
+        }
+
+        return list.ToArray();
+    }
+
     public bool Execute(string actionId, AudioDeviceConfig cfg, string? context)
     {
         try
@@ -85,13 +112,12 @@ internal sealed class AudioDeviceManager
     private static bool TryGetDevice(EDataFlow flow, ERole role, string deviceId, out IMMDevice? device)
     {
         device = null;
-        var type = Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID);
-        if (type is null)
+        var enumerator = CreateEnumerator();
+        if (enumerator is null)
         {
             return false;
         }
 
-        var enumerator = (IMMDeviceEnumerator)Activator.CreateInstance(type)!;
         try
         {
             var hr = string.IsNullOrWhiteSpace(deviceId)
@@ -173,6 +199,128 @@ internal sealed class AudioDeviceManager
         ALL = INPROC_SERVER | INPROC_HANDLER | LOCAL_SERVER | REMOTE_SERVER,
     }
 
+    private const uint DEVICE_STATE_ACTIVE = 0x00000001;
+    private const int STGM_READ = 0;
+
+    private static IMMDeviceEnumerator? CreateEnumerator()
+    {
+        var type = Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID);
+        if (type is null)
+        {
+            return null;
+        }
+
+        return (IMMDeviceEnumerator)Activator.CreateInstance(type)!;
+    }
+
+    private static void AddDevicesForFlow(IMMDeviceEnumerator enumerator, EDataFlow flow, AudioFlow mappedFlow, List<AudioDeviceInfo> list)
+    {
+        if (enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, out var collection) != 0 || collection is null)
+        {
+            return;
+        }
+
+        var defaultConsole = TryGetDefaultId(enumerator, flow, ERole.eConsole);
+        var defaultMultimedia = TryGetDefaultId(enumerator, flow, ERole.eMultimedia);
+        var defaultComms = TryGetDefaultId(enumerator, flow, ERole.eCommunications);
+
+        try
+        {
+            if (collection.GetCount(out var count) != 0)
+            {
+                return;
+            }
+
+            for (uint i = 0; i < count; i++)
+            {
+                if (collection.Item(i, out var device) != 0 || device is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (device.GetId(out var id) != 0)
+                    {
+                        continue;
+                    }
+
+                    var name = TryGetDeviceName(device) ?? "";
+                    list.Add(new AudioDeviceInfo(
+                        Id: id,
+                        Name: name,
+                        Flow: mappedFlow,
+                        IsDefaultConsole: string.Equals(id, defaultConsole, StringComparison.OrdinalIgnoreCase),
+                        IsDefaultMultimedia: string.Equals(id, defaultMultimedia, StringComparison.OrdinalIgnoreCase),
+                        IsDefaultCommunications: string.Equals(id, defaultComms, StringComparison.OrdinalIgnoreCase)));
+                }
+                finally
+                {
+                    Release(device);
+                }
+            }
+        }
+        finally
+        {
+            Release(collection);
+        }
+    }
+
+    private static string? TryGetDefaultId(IMMDeviceEnumerator enumerator, EDataFlow flow, ERole role)
+    {
+        if (enumerator.GetDefaultAudioEndpoint(flow, role, out var device) != 0 || device is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return device.GetId(out var id) == 0 ? id : null;
+        }
+        finally
+        {
+            Release(device);
+        }
+    }
+
+    private static string? TryGetDeviceName(IMMDevice device)
+    {
+        if (device.OpenPropertyStore(STGM_READ, out var store) != 0 || store is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var key = PKEY_Device_FriendlyName;
+            if (store.GetValue(ref key, out var pv) != 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                return pv.GetString();
+            }
+            finally
+            {
+                pv.Clear();
+            }
+        }
+        finally
+        {
+            Release(store);
+        }
+    }
+
+    internal sealed record AudioDeviceInfo(
+        string Id,
+        string Name,
+        AudioFlow Flow,
+        bool IsDefaultConsole,
+        bool IsDefaultMultimedia,
+        bool IsDefaultCommunications);
+
     [ComImport]
     [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
     private sealed class MMDeviceEnumerator
@@ -206,10 +354,71 @@ internal sealed class AudioDeviceManager
     private interface IMMDevice
     {
         int Activate(ref Guid iid, CLSCTX dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object? ppInterface);
-        int OpenPropertyStore(int stgmAccess, out IntPtr ppProperties);
+        int OpenPropertyStore(int stgmAccess, out IPropertyStore ppProperties);
         int GetId([MarshalAs(UnmanagedType.LPWStr)] out string ppstrId);
         int GetState(out uint pdwState);
     }
+
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        int GetCount(out uint cProps);
+        int GetAt(uint iProp, out PropertyKey pkey);
+        int GetValue(ref PropertyKey key, out PropVariant pv);
+        int SetValue(ref PropertyKey key, ref PropVariant pv);
+        int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropertyKey
+    {
+        public Guid fmtid;
+        public uint pid;
+    }
+
+    private static readonly PropertyKey PKEY_Device_FriendlyName = new()
+    {
+        fmtid = new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"),
+        pid = 14,
+    };
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct PropVariant
+    {
+        [FieldOffset(0)]
+        public ushort vt;
+
+        [FieldOffset(8)]
+        public IntPtr ptr;
+
+        public string? GetString()
+        {
+            const ushort VT_LPWSTR = 31;
+            const ushort VT_BSTR = 8;
+
+            if (vt == VT_LPWSTR)
+            {
+                return Marshal.PtrToStringUni(ptr);
+            }
+
+            if (vt == VT_BSTR)
+            {
+                return Marshal.PtrToStringBSTR(ptr);
+            }
+
+            return null;
+        }
+
+        public void Clear()
+        {
+            _ = PropVariantClear(ref this);
+        }
+    }
+
+    [DllImport("Ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant pvar);
 
     [ComImport]
     [Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
