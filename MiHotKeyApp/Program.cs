@@ -18,13 +18,16 @@ internal static class Program
         using var tray = new TrayAppContext(runtime.LogBuffer, runtime.LoggerFactory.CreateLogger(LogCategories.Error));
         tray.ApplyTrayConfig(runtime.Tray);
         tray.SetForegroundTrackingChecked(runtime.ForegroundTrackingEnabled);
+        tray.ApplyPrograms(runtime.UiPrograms);
         tray.ReloadConfigRequested += () =>
         {
             runtime.ReloadConfig();
             tray.ApplyTrayConfig(runtime.Tray);
             tray.SetForegroundTrackingChecked(runtime.ForegroundTrackingEnabled);
+            tray.ApplyPrograms(runtime.UiPrograms);
         };
         tray.ForegroundTrackingToggled += enabled => runtime.SetForegroundTrackingEnabled(enabled);
+        tray.ProgramRunRequested += programId => runtime.RunProgram(programId);
 
         Application.Run(tray);
     }

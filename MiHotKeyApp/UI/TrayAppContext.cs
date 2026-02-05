@@ -9,6 +9,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _reload;
     private readonly ToolStripMenuItem _showLog;
+    private readonly ToolStripMenuItem _runPrograms;
     private readonly ToolStripMenuItem _toggleForegroundTracking;
     private readonly ToolStripMenuItem _exit;
     private readonly LogWindowPresenter _logPresenter;
@@ -36,6 +37,9 @@ internal sealed class TrayAppContext : ApplicationContext
         _showLog.Click += (_, __) => _logPresenter.Show();
         menu.Items.Add(_showLog);
 
+        _runPrograms = new ToolStripMenuItem("Run");
+        menu.Items.Add(_runPrograms);
+
         _toggleForegroundTracking = new ToolStripMenuItem("Foreground tracking")
         {
             CheckOnClick = true,
@@ -55,6 +59,7 @@ internal sealed class TrayAppContext : ApplicationContext
 
     public event Action? ReloadConfigRequested;
     public event Action<bool>? ForegroundTrackingToggled;
+    public event Action<string>? ProgramRunRequested;
 
     public void ApplyTrayConfig(TraySection tray)
     {
@@ -62,6 +67,20 @@ internal sealed class TrayAppContext : ApplicationContext
         _showLog.Visible = tray.ShowLog;
         _exit.Visible = tray.Exit;
         _toggleForegroundTracking.Visible = tray.ToggleForegroundTracking;
+    }
+
+    public void ApplyPrograms((string Id, string Title)[] programs)
+    {
+        _runPrograms.DropDownItems.Clear();
+
+        foreach (var (id, title) in programs)
+        {
+            var item = new ToolStripMenuItem(title);
+            item.Click += (_, __) => ProgramRunRequested?.Invoke(id);
+            _runPrograms.DropDownItems.Add(item);
+        }
+
+        _runPrograms.Visible = programs.Length > 0;
     }
 
     public void SetForegroundTrackingChecked(bool enabled)

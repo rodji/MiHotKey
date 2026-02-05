@@ -14,7 +14,9 @@ internal sealed class KeySender
         _logger = logger;
     }
 
-    public bool Send(ParsedShortcut shortcut, SendMode mode, Timing timing)
+    public bool Send(ParsedShortcut shortcut, SendMode mode, Timing timing) => Send(targetHwnd: 0, shortcut, mode, timing);
+
+    public bool Send(nint targetHwnd, ParsedShortcut shortcut, SendMode mode, Timing timing)
     {
         try
         {
@@ -22,12 +24,13 @@ internal sealed class KeySender
             {
                 SendMode.Scan => SendScan(shortcut, timing),
                 SendMode.Vk => SendVk(shortcut, timing),
+                SendMode.Messages => SendMessages(targetHwnd, shortcut, timing),
                 _ => SendScan(shortcut, timing),
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SendInput failed");
+            _logger.LogError(ex, "Send failed mode={mode}", mode);
             return false;
         }
     }
@@ -62,6 +65,26 @@ internal sealed class KeySender
         return Send(inputs);
     }
 
+    private static bool SendMessages(nint hwnd, ParsedShortcut shortcut, Timing timing)
+    {
+        if (hwnd == 0 || !User32.IsWindow(hwnd))
+        {
+            return false;
+        }
+
+        var ok = true;
+
+        ok &= PostMods(hwnd, shortcut.Modifiers, down: true);
+        Sleep(timing.ModDownToKeyDown);
+        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: true);
+        Sleep(timing.KeyDownToKeyUp);
+        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: false);
+        Sleep(timing.KeyUpToModUp);
+        ok &= PostMods(hwnd, shortcut.Modifiers, down: false);
+
+        return ok;
+    }
+
     private static void AddMods(List<User32.INPUT> inputs, ShortcutModifiers mods, bool down, bool scan)
     {
         if (mods.HasFlag(ShortcutModifiers.Control))
@@ -78,6 +101,56 @@ internal sealed class KeySender
         {
             inputs.Add(MakeKey(scan, vk: 0x12, scanCode: 0x38, down));
         }
+    }
+
+    private static bool PostMods(nint hwnd, ShortcutModifiers mods, bool down)
+    {
+        var ok = true;
+        if (mods.HasFlag(ShortcutModifiers.Control))
+        {
+            ok &= PostKey(hwnd, vk: 0x11, down);
+        }
+
+        if (mods.HasFlag(ShortcutModifiers.Shift))
+        {
+            ok &= PostKey(hwnd, vk: 0x10, down);
+        }
+
+        if (mods.HasFlag(ShortcutModifiers.Alt))
+        {
+            ok &= PostKey(hwnd, vk: 0x12, down);
+        }
+
+        return ok;
+    }
+
+    private static bool PostKey(nint hwnd, ushort vk, bool down)
+    {
+        var scan = (ushort)(User32.MapVirtualKeyW(vk, User32.MAPVK_VK_TO_VSC) & 0xFF);
+        var lParam = MakeKeyLParam(scan, extended: false, down);
+
+        var msg = down ? User32.WM_KEYDOWN : User32.WM_KEYUP;
+        return User32.PostMessageW(hwnd, msg, wParam: vk, lParam);
+    }
+
+    private static nint MakeKeyLParam(ushort scanCode, bool extended, bool down)
+    {
+        // https://learn.microsoft.com/windows/win32/inputdev/wm-keydown
+        // repeatCount (0-15), scanCode (16-23), extended (24), prev (30), transition (31)
+        var lp = 1u;
+        lp |= (uint)scanCode << 16;
+        if (extended)
+        {
+            lp |= 1u << 24;
+        }
+
+        if (!down)
+        {
+            lp |= 1u << 30;
+            lp |= 1u << 31;
+        }
+
+        return (nint)lp;
     }
 
     private static void AddKey(List<User32.INPUT> inputs, System.Windows.Forms.Keys key, bool down, bool scan)

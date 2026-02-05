@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
 
   "app": {
     "configPath": ".\\config.json",
@@ -78,11 +78,15 @@
 
   "bindings": {
     "mute": [
-      "triangle.down",
-      "hexagon.down",
       "circle.down",
       "droplett.down",
       "square.down"
+    ],
+    "notepad": [
+      "triangle.down"
+    ],
+    "console": [
+      "hexagon.down"
     ]
   },
 
@@ -128,31 +132,51 @@
   },
 
   "shortcuts": {
-    "meet.mute":     { "keys": "Ctrl+D",       "send": "scan" },
-    "teams.mute":    { "keys": "Ctrl+Shift+M", "send": "scan" },
-    "telegram.mute": { "keys": "Ctrl+M",       "send": "scan" },
-    "viber.mute":    { "keys": "Ctrl+M",       "send": "scan" },
-    "whatsapp.mute": { "keys": "Ctrl+Shift+M", "send": "vk" },
-    "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "vk" }
+    "meet.mute":     { "keys": "Ctrl+D",       "send": "messages" },
+    "teams.mute":    { "keys": "Ctrl+Shift+M", "send": "messages" },
+    "telegram.mute": { "keys": "Ctrl+M",       "send": "messages" },
+    "viber.mute":    { "keys": "Ctrl+M",       "send": "messages" },
+    "whatsapp.mute": { "keys": "Ctrl+Shift+M", "send": "messages" },
+    "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "messages" }
+  },
+
+  "programs": {
+    "notepad": {
+      "title": "Notepad",
+      "file": "notepad.exe",
+      "args": "",
+      "workdir": "",
+      "useShellExecute": true,
+      "hidden": false,
+      "captureOutput": false,
+      "env": {}
+    },
+    "example.hiddenConsole": {
+      "title": "Hidden console example",
+      "file": "%ComSpec%",
+      "args": "/c echo hello from MiHotKey && exit /b 0",
+      "workdir": "",
+      "useShellExecute": false,
+      "hidden": true,
+      "captureOutput": true,
+      "env": { "MIHOTKEY_EXAMPLE": "1" }
+    }
   },
 
   "routesByTrigger": {
     "mute": [
-      { "rule": "meet",     "shortcut": "meet.mute" },
-      { "rule": "teams",    "shortcut": "teams.mute" },
-      { "rule": "telegram", "shortcut": "telegram.mute" },
-      { "rule": "viber",    "shortcut": "viber.mute" },
-      { "rule": "whatsapp", "shortcut": "whatsapp.mute" },
-      { "rule": "discord",  "shortcut": "discord.mute" }
+      { "rule": "meet",     "actionType": "Shortcut", "actionId": "meet.mute" },
+      { "rule": "teams",    "actionType": "Shortcut", "actionId": "teams.mute" },
+      { "rule": "telegram", "actionType": "Shortcut", "actionId": "telegram.mute" },
+      { "rule": "viber",    "actionType": "Shortcut", "actionId": "viber.mute" },
+      { "rule": "whatsapp", "actionType": "Shortcut", "actionId": "whatsapp.mute" },
+      { "rule": "discord",  "actionType": "Shortcut", "actionId": "discord.mute" }
+    ],
+    "notepad": [
+      { "actionType": "Program", "actionId": "notepad" }
+    ],
+    "console": [
+      { "actionType": "Program", "actionId": "example.hiddenConsole" }
     ]
-  },
-
-  "routes": [
-    { "rule": "meet",     "shortcut": "meet.mute" },
-    { "rule": "teams",    "shortcut": "teams.mute" },
-    { "rule": "telegram", "shortcut": "telegram.mute" },
-    { "rule": "viber",    "shortcut": "viber.mute" },
-    { "rule": "whatsapp", "shortcut": "whatsapp.mute" },
-    { "rule": "discord",  "shortcut": "discord.mute" }
-  ]
+  }
 }

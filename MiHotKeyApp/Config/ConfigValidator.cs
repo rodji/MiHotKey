@@ -7,7 +7,7 @@ internal static class ConfigValidator
 {
     public static void Validate(AppConfig cfg)
     {
-        if (cfg.Version != 1)
+        if (cfg.Version != 2)
         {
             throw new InvalidDataException($"Unsupported config version: {cfg.Version}");
         }
@@ -49,6 +49,20 @@ internal static class ConfigValidator
             }
         }
 
+        var programs = new HashSet<string>(cfg.Programs.Keys, StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, prog) in cfg.Programs)
+        {
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(prog.File))
+            {
+                throw new InvalidDataException("programs entries must have non-empty id and file");
+            }
+
+            if (prog.UseShellExecute && prog.Env.Count > 0)
+            {
+                throw new InvalidDataException($"programs['{id}'] has useShellExecute=true but also sets env; env is only supported when useShellExecute=false");
+            }
+        }
+
         var shortcuts = new HashSet<string>(cfg.Shortcuts.Keys, StringComparer.OrdinalIgnoreCase);
         var triggerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var hotkey in cfg.Inputs.Hotkeys)
@@ -77,14 +91,25 @@ internal static class ConfigValidator
 
             foreach (var route in routes)
             {
-                if (!ruleIds.Contains(route.Rule))
+                var rule = (route.Rule ?? "").Trim();
+                if (rule.Length > 0 && !ruleIds.Contains(rule))
                 {
                     throw new InvalidDataException($"routesByTrigger['{trigger}'] rule not found: {route.Rule}");
                 }
 
-                if (!shortcuts.Contains(route.Shortcut))
+                if (string.IsNullOrWhiteSpace(route.ActionId))
                 {
-                    throw new InvalidDataException($"routesByTrigger['{trigger}'] shortcut not found: {route.Shortcut}");
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] has empty actionId for rule: {route.Rule}");
+                }
+
+                if (route.ActionType == RouteActionType.Shortcut && !shortcuts.Contains(route.ActionId))
+                {
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] shortcut not found: {route.ActionId}");
+                }
+
+                if (route.ActionType == RouteActionType.Program && !programs.Contains(route.ActionId))
+                {
+                    throw new InvalidDataException($"routesByTrigger['{trigger}'] program not found: {route.ActionId}");
                 }
             }
         }

@@ -1,6 +1,7 @@
 namespace MiHotKeyApp;
 
 using MiHotKeyApp.Config;
+using MiHotKeyApp.Execution;
 using MiHotKeyApp.Input;
 using MiHotKeyApp.Input.Hotkey;
 using MiHotKeyApp.Input.Wmi;
@@ -26,6 +27,7 @@ internal sealed class AppRuntime : IDisposable
     private readonly WindowRuleMatcher _matcher;
     private readonly FocusController _focus;
     private readonly KeySender _sender;
+    private readonly ProgramRunner _programRunner;
     private readonly Router _router;
 
     private readonly GlobalHotkeySource _hotkeys;
@@ -59,13 +61,15 @@ internal sealed class AppRuntime : IDisposable
         _matcher = new WindowRuleMatcher();
         _focus = new FocusController();
         _sender = new KeySender(_loggerFactory.CreateLogger(LogCategories.Send));
+        _programRunner = new ProgramRunner(baseDir, _loggerFactory.CreateLogger(LogCategories.Exec));
         _router = new Router(
             _loggerFactory,
             _selector,
             _windowInfo,
             _matcher,
             _focus,
-            _sender);
+            _sender,
+            _programRunner);
 
         _hotkeys = new GlobalHotkeySource(_loggerFactory.CreateLogger(LogCategories.InputHotkey));
         _wmi = new WmiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputWmi));
@@ -81,6 +85,12 @@ internal sealed class AppRuntime : IDisposable
     public ILoggerFactory LoggerFactory => _loggerFactory;
     public TraySection Tray => _config.Tray;
     public bool ForegroundTrackingEnabled => _foreground.IsEnabled;
+
+    public (string Id, string Title)[] UiPrograms =>
+        _config.Programs
+            .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kvp => (kvp.Key, string.IsNullOrWhiteSpace(kvp.Value.Title) ? kvp.Key : kvp.Value.Title))
+            .ToArray();
 
     public void Start()
     {
@@ -150,6 +160,11 @@ internal sealed class AppRuntime : IDisposable
     private void OnTrigger(string triggerId)
     {
         _router.HandleTrigger(triggerId);
+    }
+
+    public bool RunProgram(string programId)
+    {
+        return _router.RunProgram(programId, context: "ui");
     }
 
     public void SetForegroundTrackingEnabled(bool enabled)

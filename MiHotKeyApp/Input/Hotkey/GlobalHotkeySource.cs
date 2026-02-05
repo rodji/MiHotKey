@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 internal sealed class GlobalHotkeySource : NativeWindow, ITriggerSource
 {
     private const int WM_HOTKEY = 0x0312;
+    private const int MOD_NOREPEAT = 0x4000;
     private readonly ILogger _logger;
     private readonly object _gate = new();
 
@@ -32,7 +33,7 @@ internal sealed class GlobalHotkeySource : NativeWindow, ITriggerSource
             {
                 var def = HotkeyParser.Parse(hk.Keys);
                 var id = _nextId++;
-                var ok = RegisterHotKey(Handle, id, (int)def.Modifiers, (int)def.Key);
+                var ok = RegisterHotKey(Handle, id, (int)def.Modifiers | MOD_NOREPEAT, (int)def.Key);
                 if (!ok)
                 {
                     _logger.LogWarning("Failed to register hotkey trigger={trigger} keys={keys}", hk.Id, hk.Keys);

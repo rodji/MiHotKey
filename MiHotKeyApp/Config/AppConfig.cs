@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 internal sealed class AppConfig
 {
     [JsonPropertyName("version")]
-    public int Version { get; init; } = 1;
+    public int Version { get; init; } = 2;
 
     [JsonPropertyName("app")]
     public AppSection App { get; init; } = new();
@@ -28,6 +28,9 @@ internal sealed class AppConfig
 
     [JsonPropertyName("shortcuts")]
     public Dictionary<string, ShortcutConfig> Shortcuts { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    [JsonPropertyName("programs")]
+    public Dictionary<string, ProgramConfig> Programs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     [JsonPropertyName("routesByTrigger")]
     public Dictionary<string, RouteConfig[]> RoutesByTrigger { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -210,6 +213,7 @@ internal enum SendMode
 {
     Scan,
     Vk,
+    Messages,
 }
 
 internal sealed class RouteConfig
@@ -217,6 +221,43 @@ internal sealed class RouteConfig
     [JsonPropertyName("rule")]
     public string Rule { get; init; } = "";
 
-    [JsonPropertyName("shortcut")]
-    public string Shortcut { get; init; } = "";
+    [JsonPropertyName("actionType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public RouteActionType ActionType { get; init; } = RouteActionType.Shortcut;
+
+    [JsonPropertyName("actionId")]
+    public string ActionId { get; init; } = "";
+}
+
+internal enum RouteActionType
+{
+    Shortcut,
+    Program,
+}
+
+internal sealed class ProgramConfig
+{
+    [JsonPropertyName("title")]
+    public string Title { get; init; } = "";
+
+    [JsonPropertyName("file")]
+    public string File { get; init; } = "";
+
+    [JsonPropertyName("args")]
+    public string Args { get; init; } = "";
+
+    [JsonPropertyName("workdir")]
+    public string WorkDir { get; init; } = "";
+
+    [JsonPropertyName("useShellExecute")]
+    public bool UseShellExecute { get; init; }
+
+    [JsonPropertyName("hidden")]
+    public bool Hidden { get; init; }
+
+    [JsonPropertyName("captureOutput")]
+    public bool CaptureOutput { get; init; } = true;
+
+    [JsonPropertyName("env")]
+    public Dictionary<string, string> Env { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }

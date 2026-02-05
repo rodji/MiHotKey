@@ -14,6 +14,11 @@ internal static class User32
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const uint KEYEVENTF_SCANCODE = 0x0008;
 
+    public const uint WM_KEYDOWN = 0x0100;
+    public const uint WM_KEYUP = 0x0101;
+
+    public const uint MAPVK_VK_TO_VSC = 0;
+
     public delegate void WinEventDelegate(
         nint hWinEventHook,
         uint eventType,
@@ -127,6 +132,12 @@ internal static class User32
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]
+    public static extern bool PostMessageW(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", SetLastError = true, ExactSpelling = true)]
+    public static extern uint MapVirtualKeyW(uint uCode, uint uMapType);
 
     [DllImport("user32.dll")]
     public static extern nint SetWinEventHook(
