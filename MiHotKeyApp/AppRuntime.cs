@@ -91,6 +91,7 @@ internal sealed class AppRuntime : IDisposable
     public ILoggerFactory LoggerFactory => _loggerFactory;
     public TraySection Tray => _config.Tray;
     public bool ForegroundTrackingEnabled => _foreground.IsEnabled;
+    public bool AutostartEnabled => _config.App.Autostart.Enabled;
 
     public (string Id, string Title)[] UiPrograms =>
         _config.Programs
@@ -180,6 +181,48 @@ internal sealed class AppRuntime : IDisposable
         _foregroundTrackingOverride = enabled;
         _foreground.Configure(enabled, _config.App.ForegroundHistorySize);
         _logConfig.LogInformation("foregroundTracking enabled={enabled}", enabled ? 1 : 0);
+    }
+
+    public void SetAutostartEnabled(bool enabled)
+    {
+        if (string.IsNullOrWhiteSpace(_resolvedConfigPath))
+        {
+            _logConfig.LogWarning("autostart toggle ignored: config path is empty");
+            return;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(_resolvedConfigPath);
+            var opts = new System.Text.Json.JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+            };
+
+            var node = System.Text.Json.Nodes.JsonNode.Parse(json, documentOptions: opts);
+            if (node is not System.Text.Json.Nodes.JsonObject root)
+            {
+                throw new InvalidDataException("Config root must be an object");
+            }
+
+            var app = root["app"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            root["app"] = app;
+
+            var autostart = app["autostart"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            app["autostart"] = autostart;
+
+            autostart["enabled"] = enabled;
+
+            var outJson = root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_resolvedConfigPath, outJson + Environment.NewLine);
+
+            ReloadConfig();
+        }
+        catch (Exception ex)
+        {
+            _logConfig.LogError(ex, "autostart toggle failed enabled={enabled} path=\"{path}\"", enabled ? 1 : 0, _resolvedConfigPath);
+        }
     }
 
     public void Dispose()

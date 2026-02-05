@@ -111,8 +111,9 @@
       {
         "id": "teams",
         "prio": 95,
-        "proc": [ "ms-teams", "teams", "msteams" ],
-        "titleHas": [ "Teams", "Microsoft Teams" ]
+        "proc": [ "msedgewebview2", "ms-teams" ],
+        "classIs": [ "TeamsWebView" ],
+        "titleEndsWith": [ " | Microsoft Teams" ]
       },
       {
         "id": "telegram",

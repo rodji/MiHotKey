@@ -22,6 +22,7 @@ internal sealed class WindowRuleMatcher
 
         var proc = NormalizeProc(info.ProcessName);
         var title = info.Title ?? "";
+        var cls = info.ClassName ?? "";
 
         foreach (var rule in _rules)
         {
@@ -30,12 +31,48 @@ internal sealed class WindowRuleMatcher
                 continue;
             }
 
+            if (rule.ClassIs.Length > 0)
+            {
+                var ok = false;
+                foreach (var expected in rule.ClassIs)
+                {
+                    if (!string.IsNullOrWhiteSpace(expected) && cls.Equals(expected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ok = true;
+                        break;
+                    }
+                }
+
+                if (!ok)
+                {
+                    continue;
+                }
+            }
+
             if (rule.TitleHas.Length > 0)
             {
                 var ok = false;
                 foreach (var needle in rule.TitleHas)
                 {
                     if (!string.IsNullOrEmpty(needle) && title.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ok = true;
+                        break;
+                    }
+                }
+
+                if (!ok)
+                {
+                    continue;
+                }
+            }
+
+            if (rule.TitleEndsWith.Length > 0)
+            {
+                var ok = false;
+                foreach (var needle in rule.TitleEndsWith)
+                {
+                    if (!string.IsNullOrEmpty(needle) && title.EndsWith(needle, StringComparison.OrdinalIgnoreCase))
                     {
                         ok = true;
                         break;
@@ -64,4 +101,3 @@ internal sealed class WindowRuleMatcher
         return processName;
     }
 }
-

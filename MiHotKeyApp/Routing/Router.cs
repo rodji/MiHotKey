@@ -152,7 +152,7 @@ internal sealed class Router
         foreach (var hwnd in candidates)
         {
             var wi = _info.GetInfo(hwnd);
-            _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.Title);
+            _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
 
             var rule = _matcher.Match(wi);
             if (rule is null)

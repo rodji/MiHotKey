@@ -219,8 +219,14 @@ internal sealed class TargetRuleConfig
     [JsonPropertyName("proc")]
     public string[] Proc { get; init; } = [];
 
+    [JsonPropertyName("classIs")]
+    public string[] ClassIs { get; init; } = [];
+
     [JsonPropertyName("titleHas")]
     public string[] TitleHas { get; init; } = [];
+
+    [JsonPropertyName("titleEndsWith")]
+    public string[] TitleEndsWith { get; init; } = [];
 }
 
 internal sealed class ShortcutConfig

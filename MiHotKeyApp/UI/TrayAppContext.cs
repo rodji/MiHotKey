@@ -11,6 +11,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly ToolStripMenuItem _showLog;
     private readonly ToolStripMenuItem _runPrograms;
     private readonly ToolStripMenuItem _toggleForegroundTracking;
+    private readonly ToolStripMenuItem _toggleAutostart;
     private readonly ToolStripMenuItem _exit;
     private readonly LogWindowPresenter _logPresenter;
     private readonly ILogger _logger;
@@ -48,6 +49,14 @@ internal sealed class TrayAppContext : ApplicationContext
         _toggleForegroundTracking.Click += (_, __) => ForegroundTrackingToggled?.Invoke(_toggleForegroundTracking.Checked);
         menu.Items.Add(_toggleForegroundTracking);
 
+        _toggleAutostart = new ToolStripMenuItem("Autostart")
+        {
+            CheckOnClick = true,
+            Checked = false,
+        };
+        _toggleAutostart.Click += (_, __) => AutostartToggled?.Invoke(_toggleAutostart.Checked);
+        menu.Items.Add(_toggleAutostart);
+
         menu.Items.Add(new ToolStripSeparator());
 
         _exit = new ToolStripMenuItem("Exit");
@@ -60,6 +69,7 @@ internal sealed class TrayAppContext : ApplicationContext
     public event Action? ReloadConfigRequested;
     public event Action<bool>? ForegroundTrackingToggled;
     public event Action<string>? ProgramRunRequested;
+    public event Action<bool>? AutostartToggled;
 
     public void ApplyTrayConfig(TraySection tray)
     {
@@ -86,6 +96,11 @@ internal sealed class TrayAppContext : ApplicationContext
     public void SetForegroundTrackingChecked(bool enabled)
     {
         _toggleForegroundTracking.Checked = enabled;
+    }
+
+    public void SetAutostartChecked(bool enabled)
+    {
+        _toggleAutostart.Checked = enabled;
     }
 
     protected override void ExitThreadCore()

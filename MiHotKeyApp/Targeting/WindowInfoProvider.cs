@@ -9,11 +9,12 @@ internal sealed class WindowInfoProvider
     {
         if (hwnd == 0)
         {
-            return new WindowInfo(0, 0, "", "");
+            return new WindowInfo(0, 0, "", "", "");
         }
 
         _ = User32.GetWindowThreadProcessId(hwnd, out var pid);
         var title = User32.GetWindowTitle(hwnd);
+        var cls = User32.GetWindowClassName(hwnd);
 
         var procName = "";
         try
@@ -24,7 +25,6 @@ internal sealed class WindowInfoProvider
         {
         }
 
-        return new WindowInfo(hwnd, pid, procName, title);
+        return new WindowInfo(hwnd, pid, procName, title, cls);
     }
 }
-

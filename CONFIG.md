@@ -8,6 +8,10 @@
 - `routesByTrigger[*]` теперь использует `actionType`/`actionId` вместо `shortcut`.
 - Добавлены `programs` и запуск программ из UI/роутинга.
 - Добавлен `shortcuts[*].send = "messages"` (через `PostMessage`).
+- Добавлен `app.autostart.enabled` (запуск при входе пользователя в Windows через HKCU Run).
+- В `targets.rules` добавлены опции матчинга по классу окна (`classIs`) и окончанию заголовка (`titleEndsWith`).
+- В `inputs.wmi` добавлены политики “разрешать ли триггеры при lock/remote” (`sessionPolicy`, `sessionPolicyByEvent`).
+- В `routesByTrigger` поддержано “без правила” (пустой/отсутствующий `rule`) — безусловное действие.
 
 ## Как выбирается файл конфига
 
@@ -43,7 +47,8 @@
     "foregroundHistorySize": 10,
     "targetSelectionMode": "ForegroundThenPrevious",
     "focusPolicy": "ActivateTargetTemporarily",
-    "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 }
+    "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
+    "autostart": { "enabled": false }
   }
 }
 ```
@@ -61,6 +66,9 @@
   - `ActivateTargetTemporarily` — временно активировать целевое окно для отправки (потом вернуть фокус).
   - `NoFocusChange` — не менять фокус (только если целевое окно уже foreground).
 - `sendTimingMs` — паузы (мс) между нажатиями/отжатиями модификаторов и основной клавиши.
+- `autostart.enabled` — включить автозапуск при входе пользователя в Windows.
+  - Реализация: запись в `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` значения `MiHotKey` со строкой запуска текущего `.exe`.
+  - Можно переключать из tray-меню **Autostart** — приложение обновит `config.json` и перезагрузит конфиг.
 
 ## `tray`
 
@@ -119,6 +127,10 @@ WMI-источник генерирует “события” (строки), �
         "where": { "InstanceName": "ACPI\\PNP0C14\\0x2_0" },
         "extract": { "prop": "EventDetail", "index": 2 },
         "map": { "1": "triangle.down", "6": "triangle.up" },
+        "sessionPolicy": "Any",
+        "sessionPolicyByEvent": {
+          "triangle.down": "RequireUnlockedLocalSession"
+        },
         "repeatHandling": "firstDownOnlyUntilUp",
         "debounceMs": 40
       }
@@ -132,6 +144,20 @@ WMI-источник генерирует “события” (строки), �
 
 - `map` — строковый код → имя события.
 - `bindings` — `triggerId` → список событий, которые должны вызвать этот trigger.
+- `sessionPolicy` — политика “когда разрешено принимать события” для этого источника.
+- `sessionPolicyByEvent` — переопределение политики для конкретного `mappedEvent` (ключи — это **значения** из `map`, например `triangle.down`).
+
+`sessionPolicy` / `sessionPolicyByEvent`:
+
+- `Any` — всегда принимать.
+- `RequireUnlocked` — не принимать, пока рабочая станция залочена.
+- `RequireLocalSession` — не принимать, если приложение запущено в Remote Desktop (RDP) сессии.
+- `RequireUnlockedLocalSession` — комбинация двух условий.
+
+Примечания:
+
+- “Locked” определяется по событиям `SessionLock`/`SessionUnlock` текущей пользовательской сессии.
+- “Remote” определяется по `SystemInformation.TerminalServerSession` (т.е. RDP-сессия).
 
 ## `targets.rules`
 
@@ -141,7 +167,13 @@ WMI-источник генерирует “события” (строки), �
 {
   "targets": {
     "rules": [
-      { "id": "teams", "prio": 95, "proc": [ "teams", "msteams" ], "titleHas": [ "Teams" ] }
+      {
+        "id": "teams",
+        "prio": 95,
+        "proc": [ "msedgewebview2", "ms-teams" ],
+        "classIs": [ "TeamsWebView" ],
+        "titleEndsWith": [ " | Microsoft Teams" ]
+      }
     ]
   }
 }
@@ -150,8 +182,17 @@ WMI-источник генерирует “события” (строки), �
 - `id` — идентификатор правила (используется в `routesByTrigger`).
 - `prio` — приоритет (больше = важнее).
 - `proc` — имена процессов без `.exe` (например `chrome`).
+- `classIs` — список допустимых window class name (из `GetClassNameW`).
 - `titleHas` — подстроки, которые должны встречаться в заголовке окна.
   - если `titleHas` пустой, совпадение только по `proc`.
+- `titleEndsWith` — список суффиксов, на которые должен оканчиваться заголовок окна.
+
+Матчинг:
+
+- сначала `proc` (обязательно),
+- затем (если задано) `classIs`,
+- затем (если задано) `titleHas`,
+- затем (если задано) `titleEndsWith`.
 
 ## `shortcuts`
 
@@ -221,13 +262,13 @@ WMI-источник генерирует “события” (строки), �
       { "rule": "meet",  "actionType": "Shortcut", "actionId": "meet.mute" }
     ],
     "openNotepad": [
-      { "rule": "teams", "actionType": "Program", "actionId": "notepad" }
+      { "actionType": "Program", "actionId": "notepad" }
     ]
   }
 }
 ```
 
-- `rule` — `targets.rules[].id`.
+- `rule` — `targets.rules[].id`. Если поле отсутствует или пустое (`""`) — действие выполняется **безусловно**, без матчинга окна.
 - `actionType`:
   - `Shortcut` — отправить `shortcuts[actionId]`.
   - `Program` — запустить `programs[actionId]`.
