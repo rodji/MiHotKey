@@ -188,7 +188,7 @@ internal sealed class Router
 
     private void HandleRoutedTrigger(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
     {
-        var candidates = _selector.GetCandidates(_mode);
+        var candidates = GetCandidatesForRoutes(routes);
         if (candidates.Length == 0)
         {
             _logMatch.LogInformation("none reason=noCandidates");
@@ -204,6 +204,48 @@ internal sealed class Router
         }
 
         _logMatch.LogInformation("none");
+    }
+
+    private nint[] GetCandidatesForRoutes(Dictionary<string, (RouteActionType Type, string Id)> routes)
+    {
+        var candidates = _selector.GetCandidates(_mode);
+        if (!RequiresGlobalWindowSearch(routes))
+        {
+            return candidates;
+        }
+
+        var set = new HashSet<nint>(candidates);
+        var list = candidates.ToList();
+
+        foreach (var hwnd in _info.GetTopLevelWindows())
+        {
+            if (hwnd == 0 || !set.Add(hwnd))
+            {
+                continue;
+            }
+
+            list.Add(hwnd);
+        }
+
+        return list.ToArray();
+    }
+
+    private bool RequiresGlobalWindowSearch(Dictionary<string, (RouteActionType Type, string Id)> routes)
+    {
+        foreach (var action in routes.Values)
+        {
+            if (action.Type != RouteActionType.Shortcut)
+            {
+                continue;
+            }
+
+            if (_shortcuts.TryGetValue(action.Id, out var shortcut) && shortcut.Mode == SendMode.Global)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TryHandleCandidate(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes, nint hwnd)
@@ -267,6 +309,11 @@ internal sealed class Router
 
     private SendResult SendShortcutToWindow(nint hwnd, (ParsedShortcut Shortcut, SendMode Mode) shortcut)
     {
+        if (shortcut.Mode == SendMode.Global)
+        {
+            return SendResult.Logged(_sender.Send(shortcut.Shortcut, shortcut.Mode, _timing));
+        }
+
         if (shortcut.Mode == SendMode.Messages)
         {
             return SendResult.Logged(_sender.Send(hwnd, shortcut.Shortcut, shortcut.Mode, _timing));

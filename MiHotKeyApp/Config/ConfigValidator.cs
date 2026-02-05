@@ -181,9 +181,9 @@ internal static class ConfigValidator
         foreach (var (id, sc) in cfg.Shortcuts)
         {
             var parsed = ShortcutParser.Parse(sc.Keys);
-            if (sc.Send == SendMode.Scan && !ScanCodeMap.TryGetScanCode(parsed.Key, out _))
+            if ((sc.Send == SendMode.Scan || sc.Send == SendMode.Global) && !ScanCodeMap.TryGetScanCode(parsed.Key, out _))
             {
-                throw new InvalidDataException($"shortcuts['{id}'] uses send=scan but key '{parsed.Key}' has no scan code mapping");
+                throw new InvalidDataException($"shortcuts['{id}'] uses send=scan/global but key '{parsed.Key}' has no scan code mapping");
             }
         }
     }

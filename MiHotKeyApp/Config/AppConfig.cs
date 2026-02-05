@@ -252,6 +252,7 @@ internal enum SendMode
     Scan,
     Vk,
     Messages,
+    Global,
 }
 
 internal sealed class RouteConfig

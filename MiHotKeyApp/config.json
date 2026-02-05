@@ -144,7 +144,7 @@
 
   "shortcuts": {
     "meet.mute":     { "keys": "Ctrl+D",       "send": "messages" },
-    "teams.mute":    { "keys": "Ctrl+Shift+M", "send": "scan" },
+    "teams.mute":    { "keys": "Win+Alt+K",    "send": "global" },
     "telegram.mute": { "keys": "Ctrl+M",       "send": "messages" },
     "viber.mute":    { "keys": "Ctrl+M",       "send": "messages" },
     "whatsapp.mute": { "keys": "Ctrl+Shift+M", "send": "messages" },

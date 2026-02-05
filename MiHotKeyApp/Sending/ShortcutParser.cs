@@ -35,6 +35,12 @@ internal static class ShortcutParser
                 continue;
             }
 
+            if (part.Equals("Win", StringComparison.OrdinalIgnoreCase) || part.Equals("Windows", StringComparison.OrdinalIgnoreCase))
+            {
+                mods |= ShortcutModifiers.Win;
+                continue;
+            }
+
             if (key != Keys.None)
             {
                 throw new FormatException($"Shortcut has multiple main keys: {text}");
@@ -71,7 +77,7 @@ internal enum ShortcutModifiers
     Alt = 1,
     Control = 2,
     Shift = 4,
+    Win = 8,
 }
 
 internal readonly record struct ParsedShortcut(ShortcutModifiers Modifiers, Keys Key, string Text);
-

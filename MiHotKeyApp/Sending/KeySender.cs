@@ -13,11 +13,13 @@ internal sealed class KeySender
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_SHIFT = 0x10;
     private const ushort VK_MENU = 0x12; // Alt
+    private const ushort VK_LWIN = 0x5B;
 
     // Set 1 (IBM PC/AT) scan codes used by SendInput(KEYEVENTF_SCANCODE) for modifier keys.
     private const ushort SC_CONTROL = 0x1D;
     private const ushort SC_SHIFT = 0x2A;
     private const ushort SC_MENU = 0x38; // Alt
+    private const ushort SC_LWIN = 0x5B; // Extended (0xE0 0x5B)
 
     // MapVirtualKey(VK->VSC) returns a value where low byte is the scan code (for most keys).
     private const ushort SCANCODE_LOWBYTE_MASK = 0xFF;
@@ -47,6 +49,7 @@ internal sealed class KeySender
                 SendMode.Scan => SendScan(shortcut, timing),
                 SendMode.Vk => SendVk(shortcut, timing),
                 SendMode.Messages => SendMessages(targetHwnd, shortcut, timing),
+                SendMode.Global => SendScan(shortcut, timing),
                 _ => SendScan(shortcut, timing),
             };
         }
@@ -98,9 +101,9 @@ internal sealed class KeySender
 
         ok &= PostMods(hwnd, shortcut.Modifiers, down: true);
         Sleep(timing.ModDownToKeyDown);
-        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: true);
+        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: true, extended: false);
         Sleep(timing.KeyDownToKeyUp);
-        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: false);
+        ok &= PostKey(hwnd, (ushort)shortcut.Key, down: false, extended: false);
         Sleep(timing.KeyUpToModUp);
         ok &= PostMods(hwnd, shortcut.Modifiers, down: false);
 
@@ -111,17 +114,22 @@ internal sealed class KeySender
     {
         if (mods.HasFlag(ShortcutModifiers.Control))
         {
-            inputs.Add(MakeKey(scan, vk: VK_CONTROL, scanCode: SC_CONTROL, down));
+            inputs.Add(MakeKey(scan, vk: VK_CONTROL, scanCode: SC_CONTROL, down, extended: false));
         }
 
         if (mods.HasFlag(ShortcutModifiers.Shift))
         {
-            inputs.Add(MakeKey(scan, vk: VK_SHIFT, scanCode: SC_SHIFT, down));
+            inputs.Add(MakeKey(scan, vk: VK_SHIFT, scanCode: SC_SHIFT, down, extended: false));
         }
 
         if (mods.HasFlag(ShortcutModifiers.Alt))
         {
-            inputs.Add(MakeKey(scan, vk: VK_MENU, scanCode: SC_MENU, down));
+            inputs.Add(MakeKey(scan, vk: VK_MENU, scanCode: SC_MENU, down, extended: false));
+        }
+
+        if (mods.HasFlag(ShortcutModifiers.Win))
+        {
+            inputs.Add(MakeKey(scan, vk: VK_LWIN, scanCode: SC_LWIN, down, extended: true));
         }
     }
 
@@ -130,26 +138,31 @@ internal sealed class KeySender
         var ok = true;
         if (mods.HasFlag(ShortcutModifiers.Control))
         {
-            ok &= PostKey(hwnd, vk: VK_CONTROL, down);
+            ok &= PostKey(hwnd, vk: VK_CONTROL, down, extended: false);
         }
 
         if (mods.HasFlag(ShortcutModifiers.Shift))
         {
-            ok &= PostKey(hwnd, vk: VK_SHIFT, down);
+            ok &= PostKey(hwnd, vk: VK_SHIFT, down, extended: false);
         }
 
         if (mods.HasFlag(ShortcutModifiers.Alt))
         {
-            ok &= PostKey(hwnd, vk: VK_MENU, down);
+            ok &= PostKey(hwnd, vk: VK_MENU, down, extended: false);
+        }
+
+        if (mods.HasFlag(ShortcutModifiers.Win))
+        {
+            ok &= PostKey(hwnd, vk: VK_LWIN, down, extended: true);
         }
 
         return ok;
     }
 
-    private static bool PostKey(nint hwnd, ushort vk, bool down)
+    private static bool PostKey(nint hwnd, ushort vk, bool down, bool extended)
     {
         var scan = (ushort)(User32.MapVirtualKeyW(vk, User32.MAPVK_VK_TO_VSC) & SCANCODE_LOWBYTE_MASK);
-        var lParam = MakeKeyLParam(scan, extended: false, down);
+        var lParam = MakeKeyLParam(scan, extended, down);
 
         var msg = down ? User32.WM_KEYDOWN : User32.WM_KEYUP;
         return User32.PostMessageW(hwnd, msg, wParam: vk, lParam);
@@ -178,14 +191,14 @@ internal sealed class KeySender
         if (scan)
         {
             var sc = ScanCodeMap.TryGetScanCode(key, out var code) ? code : (ushort)0;
-            inputs.Add(MakeKey(scan: true, vk: 0, scanCode: sc, down));
+            inputs.Add(MakeKey(scan: true, vk: 0, scanCode: sc, down, extended: false));
             return;
         }
 
-        inputs.Add(MakeKey(scan: false, vk: (ushort)key, scanCode: 0, down));
+        inputs.Add(MakeKey(scan: false, vk: (ushort)key, scanCode: 0, down, extended: false));
     }
 
-    private static User32.INPUT MakeKey(bool scan, ushort vk, ushort scanCode, bool down)
+    private static User32.INPUT MakeKey(bool scan, ushort vk, ushort scanCode, bool down, bool extended)
     {
         var flags = 0u;
         if (!down)
@@ -196,6 +209,11 @@ internal sealed class KeySender
         if (scan)
         {
             flags |= User32.KEYEVENTF_SCANCODE;
+        }
+
+        if (extended)
+        {
+            flags |= User32.KEYEVENTF_EXTENDEDKEY;
         }
 
         return new User32.INPUT
