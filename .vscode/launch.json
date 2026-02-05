@@ -18,6 +18,29 @@
             "stopAtEntry": false
         },
         {
+            "name": ".NET Core Launch (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build release",
+            "program": "${workspaceFolder}/MiHotKeyApp/bin/Release/net8.0-windows/MiHotKeyApp.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/MiHotKeyApp",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Launch (Release, No Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "noDebug": true,
+            "preLaunchTask": "build release",
+            "program": "${workspaceFolder}/MiHotKeyApp/bin/Release/net8.0-windows/MiHotKeyApp.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/MiHotKeyApp",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
             "name": ".NET Core Attach",
             "type": "coreclr",
             "request": "attach"

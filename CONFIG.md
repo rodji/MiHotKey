@@ -201,15 +201,15 @@ WMI-источник генерирует “события” (строки), �
 ```jsonc
 {
   "shortcuts": {
-    "teams.mute": { "keys": "Ctrl+Shift+M", "send": "messages" }
+    "teams.mute": { "keys": "Ctrl+Shift+M", "send": "scan" }
   }
 }
 ```
 
 `send`:
 
-- `scan` — `SendInput` по scan-code (требует, чтобы клавиша была в маппинге scan-кодов; сейчас маппинг есть для A..Z).
-- `vk` — `SendInput` по virtual key.
+- `scan` — `SendInput` по scan-code (обычно **не зависит от раскладки**; требует, чтобы клавиша была в маппинге scan-кодов; сейчас маппинг есть для A..Z).
+- `vk` — `SendInput` по virtual key (**зависит от раскладки/языка** активного ввода).
 - `messages` — отправка `WM_KEYDOWN/WM_KEYUP` через `PostMessage` в целевое окно **без смены фокуса** (работает не во всех приложениях, но часто помогает при конфликте модификаторов с глобальным хоткеем).
 
 ## `programs`
