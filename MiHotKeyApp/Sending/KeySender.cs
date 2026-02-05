@@ -9,6 +9,28 @@ internal sealed class KeySender
 {
     private readonly ILogger _logger;
 
+    // Virtual-key codes for modifiers (WinUser.h)
+    private const ushort VK_CONTROL = 0x11;
+    private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_MENU = 0x12; // Alt
+
+    // Set 1 (IBM PC/AT) scan codes used by SendInput(KEYEVENTF_SCANCODE) for modifier keys.
+    private const ushort SC_CONTROL = 0x1D;
+    private const ushort SC_SHIFT = 0x2A;
+    private const ushort SC_MENU = 0x38; // Alt
+
+    // MapVirtualKey(VK->VSC) returns a value where low byte is the scan code (for most keys).
+    private const ushort SCANCODE_LOWBYTE_MASK = 0xFF;
+
+    // WM_KEYDOWN/WM_KEYUP lParam bit layout.
+    // repeatCount (0-15), scanCode (16-23), extended (24), prev (30), transition (31)
+    // https://learn.microsoft.com/windows/win32/inputdev/wm-keydown
+    private const int KEYLPARAM_SCANCODE_SHIFT = 16;
+    private const int KEYLPARAM_EXTENDED_BIT = 24;
+    private const int KEYLPARAM_PREV_STATE_BIT = 30;
+    private const int KEYLPARAM_TRANSITION_BIT = 31;
+    private const uint KEYLPARAM_REPEATCOUNT_1 = 1u;
+
     public KeySender(ILogger logger)
     {
         _logger = logger;
@@ -89,17 +111,17 @@ internal sealed class KeySender
     {
         if (mods.HasFlag(ShortcutModifiers.Control))
         {
-            inputs.Add(MakeKey(scan, vk: 0x11, scanCode: 0x1D, down));
+            inputs.Add(MakeKey(scan, vk: VK_CONTROL, scanCode: SC_CONTROL, down));
         }
 
         if (mods.HasFlag(ShortcutModifiers.Shift))
         {
-            inputs.Add(MakeKey(scan, vk: 0x10, scanCode: 0x2A, down));
+            inputs.Add(MakeKey(scan, vk: VK_SHIFT, scanCode: SC_SHIFT, down));
         }
 
         if (mods.HasFlag(ShortcutModifiers.Alt))
         {
-            inputs.Add(MakeKey(scan, vk: 0x12, scanCode: 0x38, down));
+            inputs.Add(MakeKey(scan, vk: VK_MENU, scanCode: SC_MENU, down));
         }
     }
 
@@ -108,17 +130,17 @@ internal sealed class KeySender
         var ok = true;
         if (mods.HasFlag(ShortcutModifiers.Control))
         {
-            ok &= PostKey(hwnd, vk: 0x11, down);
+            ok &= PostKey(hwnd, vk: VK_CONTROL, down);
         }
 
         if (mods.HasFlag(ShortcutModifiers.Shift))
         {
-            ok &= PostKey(hwnd, vk: 0x10, down);
+            ok &= PostKey(hwnd, vk: VK_SHIFT, down);
         }
 
         if (mods.HasFlag(ShortcutModifiers.Alt))
         {
-            ok &= PostKey(hwnd, vk: 0x12, down);
+            ok &= PostKey(hwnd, vk: VK_MENU, down);
         }
 
         return ok;
@@ -126,7 +148,7 @@ internal sealed class KeySender
 
     private static bool PostKey(nint hwnd, ushort vk, bool down)
     {
-        var scan = (ushort)(User32.MapVirtualKeyW(vk, User32.MAPVK_VK_TO_VSC) & 0xFF);
+        var scan = (ushort)(User32.MapVirtualKeyW(vk, User32.MAPVK_VK_TO_VSC) & SCANCODE_LOWBYTE_MASK);
         var lParam = MakeKeyLParam(scan, extended: false, down);
 
         var msg = down ? User32.WM_KEYDOWN : User32.WM_KEYUP;
@@ -135,19 +157,17 @@ internal sealed class KeySender
 
     private static nint MakeKeyLParam(ushort scanCode, bool extended, bool down)
     {
-        // https://learn.microsoft.com/windows/win32/inputdev/wm-keydown
-        // repeatCount (0-15), scanCode (16-23), extended (24), prev (30), transition (31)
-        var lp = 1u;
-        lp |= (uint)scanCode << 16;
+        var lp = KEYLPARAM_REPEATCOUNT_1;
+        lp |= (uint)scanCode << KEYLPARAM_SCANCODE_SHIFT;
         if (extended)
         {
-            lp |= 1u << 24;
+            lp |= 1u << KEYLPARAM_EXTENDED_BIT;
         }
 
         if (!down)
         {
-            lp |= 1u << 30;
-            lp |= 1u << 31;
+            lp |= 1u << KEYLPARAM_PREV_STATE_BIT;
+            lp |= 1u << KEYLPARAM_TRANSITION_BIT;
         }
 
         return (nint)lp;

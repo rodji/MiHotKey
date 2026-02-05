@@ -30,6 +30,12 @@ internal sealed class Router
     private FocusPolicy _focusPolicy = FocusPolicy.ActivateTargetTemporarily;
     private Timing _timing = new(5, 2, 2);
 
+    private readonly record struct SendResult(bool Ok, bool LogResult)
+    {
+        public static SendResult Logged(bool ok) => new(ok, LogResult: true);
+        public static SendResult Unlogged(bool ok) => new(ok, LogResult: false);
+    }
+
     public Router(
         ILoggerFactory loggerFactory,
         TargetSelector selector,
@@ -92,56 +98,75 @@ internal sealed class Router
             return;
         }
 
-        if (routes.TryGetValue("", out var unconditional))
+        if (TryHandleUnconditional(triggerId, routes))
         {
-            if (unconditional.Type == RouteActionType.Shortcut)
-            {
-                if (!_shortcuts.TryGetValue(unconditional.Id, out var shortcut))
-                {
-                    _logMatch.LogInformation("trigger={trigger} rule=any shortcut={shortcut} missing=1", triggerId, unconditional.Id);
-                    return;
-                }
-
-                _logMatch.LogInformation("trigger={trigger} rule=any shortcut={shortcut}", triggerId, unconditional.Id);
-
-                var ok = false;
-                if (shortcut.Mode == SendMode.Messages)
-                {
-                    var hwnd = User32.GetForegroundWindow();
-                    if (hwnd == 0)
-                    {
-                        _logSend.LogWarning("mode={mode} keys=\"{keys}\" ok=0 err=NoForegroundWindow", shortcut.Mode, shortcut.Shortcut.Text);
-                        return;
-                    }
-
-                    ok = _sender.Send(hwnd, shortcut.Shortcut, shortcut.Mode, _timing);
-                }
-                else
-                {
-                    ok = _sender.Send(shortcut.Shortcut, shortcut.Mode, _timing);
-                }
-
-                _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, ok ? 1 : 0);
-                return;
-            }
-
-            if (unconditional.Type == RouteActionType.Program)
-            {
-                if (!_programs.TryGetValue(unconditional.Id, out var program))
-                {
-                    _logMatch.LogInformation("trigger={trigger} rule=any program={program} missing=1", triggerId, unconditional.Id);
-                    return;
-                }
-
-                _logExec.LogInformation("trigger={trigger} rule=any program={program}", triggerId, unconditional.Id);
-                _ = _programRunner.TryStart(unconditional.Id, program, context: $"trigger={triggerId} rule=<any>");
-                return;
-            }
-
-            _logMatch.LogInformation("trigger={trigger} rule=any actionType={type} unsupported=1", triggerId, unconditional.Type);
             return;
         }
 
+        HandleRoutedTrigger(triggerId, routes);
+    }
+
+    private bool TryHandleUnconditional(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
+    {
+        if (!routes.TryGetValue("", out var action))
+        {
+            return false;
+        }
+
+        if (action.Type == RouteActionType.Shortcut)
+        {
+            if (!_shortcuts.TryGetValue(action.Id, out var shortcut))
+            {
+                _logMatch.LogInformation("trigger={trigger} rule=any shortcut={shortcut} missing=1", triggerId, action.Id);
+                return true;
+            }
+
+            _logMatch.LogInformation("trigger={trigger} rule=any shortcut={shortcut}", triggerId, action.Id);
+
+            var res = SendShortcutUnconditional(shortcut);
+            if (res.LogResult)
+            {
+                _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, res.Ok ? 1 : 0);
+            }
+            return true;
+        }
+
+        if (action.Type == RouteActionType.Program)
+        {
+            if (!_programs.TryGetValue(action.Id, out var program))
+            {
+                _logMatch.LogInformation("trigger={trigger} rule=any program={program} missing=1", triggerId, action.Id);
+                return true;
+            }
+
+            _logExec.LogInformation("trigger={trigger} rule=any program={program}", triggerId, action.Id);
+            _ = _programRunner.TryStart(action.Id, program, context: $"trigger={triggerId} rule=<any>");
+            return true;
+        }
+
+        _logMatch.LogInformation("trigger={trigger} rule=any actionType={type} unsupported=1", triggerId, action.Type);
+        return true;
+    }
+
+    private SendResult SendShortcutUnconditional((ParsedShortcut Shortcut, SendMode Mode) shortcut)
+    {
+        if (shortcut.Mode == SendMode.Messages)
+        {
+            var hwnd = User32.GetForegroundWindow();
+            if (hwnd == 0)
+            {
+                _logSend.LogWarning("mode={mode} keys=\"{keys}\" ok=0 err=NoForegroundWindow", shortcut.Mode, shortcut.Shortcut.Text);
+                return SendResult.Unlogged(ok: false);
+            }
+
+            return SendResult.Logged(_sender.Send(hwnd, shortcut.Shortcut, shortcut.Mode, _timing));
+        }
+
+        return SendResult.Logged(_sender.Send(shortcut.Shortcut, shortcut.Mode, _timing));
+    }
+
+    private void HandleRoutedTrigger(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
+    {
         var candidates = _selector.GetCandidates(_mode);
         if (candidates.Length == 0)
         {
@@ -151,73 +176,101 @@ internal sealed class Router
 
         foreach (var hwnd in candidates)
         {
-            var wi = _info.GetInfo(hwnd);
-            _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
-
-            var rule = _matcher.Match(wi);
-            if (rule is null)
+            if (TryHandleCandidate(triggerId, routes, hwnd))
             {
-                continue;
-            }
-
-            if (!routes.TryGetValue(rule.Id, out var action))
-            {
-                _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} action=missing", triggerId, rule.Id, rule.Prio);
                 return;
             }
-
-            if (action.Type == RouteActionType.Shortcut)
-            {
-                if (!_shortcuts.TryGetValue(action.Id, out var shortcut))
-                {
-                    _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut} missing=1", triggerId, rule.Id, rule.Prio, action.Id);
-                    return;
-                }
-
-                _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut}", triggerId, rule.Id, rule.Prio, action.Id);
-
-                var ok = false;
-                if (shortcut.Mode == SendMode.Messages)
-                {
-                    ok = _sender.Send(hwnd, shortcut.Shortcut, shortcut.Mode, _timing);
-                }
-                else if (_focusPolicy == FocusPolicy.NoFocusChange)
-                {
-                    if (User32.GetForegroundWindow() != hwnd)
-                    {
-                        _logSend.LogWarning("mode={mode} keys=\"{keys}\" ok=0 err=NoFocusChange", shortcut.Mode, shortcut.Shortcut.Text);
-                        return;
-                    }
-
-                    ok = _sender.Send(shortcut.Shortcut, shortcut.Mode, _timing);
-                }
-                else
-                {
-                    ok = _focus.TryActivateTemporarily(hwnd, () => _sender.Send(shortcut.Shortcut, shortcut.Mode, _timing));
-                }
-
-                _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, ok ? 1 : 0);
-                return;
-            }
-
-            if (action.Type == RouteActionType.Program)
-            {
-                if (!_programs.TryGetValue(action.Id, out var program))
-                {
-                    _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program} missing=1", triggerId, rule.Id, rule.Prio, action.Id);
-                    return;
-                }
-
-                _logExec.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program}", triggerId, rule.Id, rule.Prio, action.Id);
-                _ = _programRunner.TryStart(action.Id, program, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
-                return;
-            }
-
-            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} actionType={type} unsupported=1", triggerId, rule.Id, rule.Prio, action.Type);
-            return;
         }
 
         _logMatch.LogInformation("none");
+    }
+
+    private bool TryHandleCandidate(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes, nint hwnd)
+    {
+        var wi = _info.GetInfo(hwnd);
+        _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
+
+        var rule = _matcher.Match(wi);
+        if (rule is null)
+        {
+            return false;
+        }
+
+        if (!routes.TryGetValue(rule.Id, out var action))
+        {
+            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} action=missing", triggerId, rule.Id, rule.Prio);
+            return true;
+        }
+
+        return ExecuteAction(triggerId, rule, action, hwnd);
+    }
+
+    private bool ExecuteAction(string triggerId, TargetRuleConfig rule, (RouteActionType Type, string Id) action, nint hwnd)
+    {
+        if (action.Type == RouteActionType.Shortcut)
+        {
+            return ExecuteShortcut(triggerId, rule, action.Id, hwnd);
+        }
+
+        if (action.Type == RouteActionType.Program)
+        {
+            return ExecuteProgram(triggerId, rule, action.Id, hwnd);
+        }
+
+        _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} actionType={type} unsupported=1", triggerId, rule.Id, rule.Prio, action.Type);
+        return true;
+    }
+
+    private bool ExecuteShortcut(string triggerId, TargetRuleConfig rule, string shortcutId, nint hwnd)
+    {
+        if (!_shortcuts.TryGetValue(shortcutId, out var shortcut))
+        {
+            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut} missing=1", triggerId, rule.Id, rule.Prio, shortcutId);
+            return true;
+        }
+
+        _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut}", triggerId, rule.Id, rule.Prio, shortcutId);
+
+        var res = SendShortcutToWindow(hwnd, shortcut);
+        if (res.LogResult)
+        {
+            _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, res.Ok ? 1 : 0);
+        }
+        return true;
+    }
+
+    private SendResult SendShortcutToWindow(nint hwnd, (ParsedShortcut Shortcut, SendMode Mode) shortcut)
+    {
+        if (shortcut.Mode == SendMode.Messages)
+        {
+            return SendResult.Logged(_sender.Send(hwnd, shortcut.Shortcut, shortcut.Mode, _timing));
+        }
+
+        if (_focusPolicy == FocusPolicy.NoFocusChange)
+        {
+            if (User32.GetForegroundWindow() != hwnd)
+            {
+                _logSend.LogWarning("mode={mode} keys=\"{keys}\" ok=0 err=NoFocusChange", shortcut.Mode, shortcut.Shortcut.Text);
+                return SendResult.Unlogged(ok: false);
+            }
+
+            return SendResult.Logged(_sender.Send(shortcut.Shortcut, shortcut.Mode, _timing));
+        }
+
+        return SendResult.Logged(_focus.TryActivateTemporarily(hwnd, () => _sender.Send(shortcut.Shortcut, shortcut.Mode, _timing)));
+    }
+
+    private bool ExecuteProgram(string triggerId, TargetRuleConfig rule, string programId, nint hwnd)
+    {
+        if (!_programs.TryGetValue(programId, out var program))
+        {
+            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program} missing=1", triggerId, rule.Id, rule.Prio, programId);
+            return true;
+        }
+
+        _logExec.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program}", triggerId, rule.Id, rule.Prio, programId);
+        _ = _programRunner.TryStart(programId, program, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
+        return true;
     }
 
     public bool RunProgram(string programId, string? context)
