@@ -15,6 +15,10 @@
       "modDownToKeyDown": 5,
       "keyDownToKeyUp": 2,
       "keyUpToModUp": 2
+    },
+
+    "autostart": {
+      "enabled": false
     }
   },
 
@@ -68,6 +72,12 @@
 
           "5": "square.down",
           "10": "square.up"
+        },
+
+        "sessionPolicy": "Any",
+        "sessionPolicyByEvent": {
+          "triangle.down": "RequireUnlockedLocalSession",
+          "hexagon.down": "RequireUnlockedLocalSession"
         },
 
         "repeatHandling": "firstDownOnlyUntilUp",

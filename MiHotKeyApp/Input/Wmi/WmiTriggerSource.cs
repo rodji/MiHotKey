@@ -3,20 +3,23 @@ namespace MiHotKeyApp.Input.Wmi;
 using System.Globalization;
 using System.Management;
 using MiHotKeyApp.Config;
+using MiHotKeyApp.Execution;
 using MiHotKeyApp.Logging;
 using Microsoft.Extensions.Logging;
 
 internal sealed class WmiTriggerSource : ITriggerSource
 {
     private readonly ILogger _logger;
+    private readonly SessionState _session;
     private readonly object _gate = new();
 
     private readonly List<Watcher> _watchers = [];
     private WmiInputConfig[] _configs = [];
 
-    public WmiTriggerSource(ILogger logger)
+    public WmiTriggerSource(ILogger logger, SessionState session)
     {
         _logger = logger;
+        _session = session;
     }
 
     public event Action<string, int, string>? EventReceived;
@@ -122,12 +125,43 @@ internal sealed class WmiTriggerSource : ITriggerSource
                 }
             }
 
+            var policy = cfg.SessionPolicy;
+            if (cfg.SessionPolicyByEvent.TryGetValue(mappedEvent, out var perEvent))
+            {
+                policy = perEvent;
+            }
+
+            if (!IsAllowed(policy))
+            {
+                _logger.LogDebug(
+                    "drop src={src} code={code} event={event} policy={policy} locked={locked} remote={remote}",
+                    cfg.Id,
+                    code,
+                    mappedEvent,
+                    policy,
+                    _session.IsLocked ? 1 : 0,
+                    _session.IsRemoteSession ? 1 : 0);
+                return;
+            }
+
             EventReceived?.Invoke(cfg.Id, code, mappedEvent);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "WMI event processing failed");
         }
+    }
+
+    private bool IsAllowed(InputSessionPolicy policy)
+    {
+        return policy switch
+        {
+            InputSessionPolicy.Any => true,
+            InputSessionPolicy.RequireUnlocked => !_session.IsLocked,
+            InputSessionPolicy.RequireLocalSession => !_session.IsRemoteSession,
+            InputSessionPolicy.RequireUnlockedLocalSession => !_session.IsLocked && !_session.IsRemoteSession,
+            _ => true,
+        };
     }
 
     private static byte[]? TryGetByteArray(object? value)
@@ -188,4 +222,3 @@ internal sealed class WmiTriggerSource : ITriggerSource
         }
     }
 }
-

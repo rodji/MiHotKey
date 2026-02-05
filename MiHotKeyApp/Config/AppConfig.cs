@@ -63,6 +63,15 @@ internal sealed class AppSection
 
     [JsonPropertyName("sendTimingMs")]
     public SendTimingMsSection SendTimingMs { get; init; } = new();
+
+    [JsonPropertyName("autostart")]
+    public AutostartSection Autostart { get; init; } = new();
+}
+
+internal sealed class AutostartSection
+{
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; init; }
 }
 
 internal sealed class SendTimingMsSection
@@ -162,11 +171,26 @@ internal sealed class WmiInputConfig
     [JsonPropertyName("map")]
     public Dictionary<string, string> Map { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
+    [JsonPropertyName("sessionPolicy")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public InputSessionPolicy SessionPolicy { get; init; } = InputSessionPolicy.Any;
+
+    [JsonPropertyName("sessionPolicyByEvent")]
+    public Dictionary<string, InputSessionPolicy> SessionPolicyByEvent { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
     [JsonPropertyName("repeatHandling")]
     public string RepeatHandling { get; init; } = "firstDownOnlyUntilUp";
 
     [JsonPropertyName("debounceMs")]
     public int DebounceMs { get; init; } = 40;
+}
+
+internal enum InputSessionPolicy
+{
+    Any,
+    RequireUnlocked,
+    RequireLocalSession,
+    RequireUnlockedLocalSession,
 }
 
 internal sealed class WmiExtractConfig

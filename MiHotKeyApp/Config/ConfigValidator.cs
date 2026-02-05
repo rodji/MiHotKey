@@ -145,6 +145,23 @@ internal static class ConfigValidator
             {
                 throw new InvalidDataException($"inputs.wmi[{wmi.Id}].map must not be empty");
             }
+
+            if (wmi.SessionPolicyByEvent.Count > 0)
+            {
+                var knownEvents = new HashSet<string>(wmi.Map.Values, StringComparer.OrdinalIgnoreCase);
+                foreach (var (ev, _) in wmi.SessionPolicyByEvent)
+                {
+                    if (string.IsNullOrWhiteSpace(ev))
+                    {
+                        throw new InvalidDataException($"inputs.wmi[{wmi.Id}].sessionPolicyByEvent has empty event key");
+                    }
+
+                    if (!knownEvents.Contains(ev))
+                    {
+                        throw new InvalidDataException($"inputs.wmi[{wmi.Id}].sessionPolicyByEvent event not found in map values: {ev}");
+                    }
+                }
+            }
         }
 
         foreach (var (id, sc) in cfg.Shortcuts)

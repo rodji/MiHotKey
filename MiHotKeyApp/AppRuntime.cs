@@ -21,6 +21,9 @@ internal sealed class AppRuntime : IDisposable
 
     private readonly ILogger _logConfig;
 
+    private readonly SessionState _session;
+    private readonly AutostartManager _autostart;
+
     private readonly ForegroundTracker _foreground;
     private readonly TargetSelector _selector;
     private readonly WindowInfoProvider _windowInfo;
@@ -53,6 +56,9 @@ internal sealed class AppRuntime : IDisposable
 
         _logConfig = _loggerFactory.CreateLogger(LogCategories.Config);
 
+        _session = new SessionState(_loggerFactory.CreateLogger(LogCategories.Config));
+        _autostart = new AutostartManager(_loggerFactory.CreateLogger(LogCategories.Config));
+
         _foreground = new ForegroundTracker(10);
         _foreground.Start();
 
@@ -72,7 +78,7 @@ internal sealed class AppRuntime : IDisposable
             _programRunner);
 
         _hotkeys = new GlobalHotkeySource(_loggerFactory.CreateLogger(LogCategories.InputHotkey));
-        _wmi = new WmiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputWmi));
+        _wmi = new WmiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputWmi), _session);
 
         _dispatcher = new TriggerDispatcher(ui, _loggerFactory, _hotkeys, _wmi);
         _dispatcher.TriggerFired += OnTrigger;
@@ -147,6 +153,8 @@ internal sealed class AppRuntime : IDisposable
         _config = cfg;
         _resolvedConfigPath = resolvedPath;
 
+        _autostart.Apply(cfg.App.Autostart.Enabled);
+
         var effectiveTrackingEnabled = _foregroundTrackingOverride ?? cfg.App.ForegroundTrackingEnabled;
         _foreground.Configure(effectiveTrackingEnabled, cfg.App.ForegroundHistorySize);
 
@@ -179,6 +187,7 @@ internal sealed class AppRuntime : IDisposable
         _dispatcher.TriggerFired -= OnTrigger;
         _dispatcher.Dispose();
         _foreground.Dispose();
+        _session.Dispose();
         _loggerFactory.Dispose();
     }
 }
