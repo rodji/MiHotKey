@@ -222,6 +222,11 @@ internal sealed class TargetRuleConfig
     [JsonPropertyName("classIs")]
     public string[] ClassIs { get; init; } = [];
 
+    // Title matching patterns. See CONFIG.md (glob / substring semantics).
+    [JsonPropertyName("title")]
+    public string[] Title { get; init; } = [];
+
+    // Backward compatible fields (v2 earlier builds).
     [JsonPropertyName("titleHas")]
     public string[] TitleHas { get; init; } = [];
 

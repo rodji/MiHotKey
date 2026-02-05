@@ -106,38 +106,38 @@
         "id": "meet",
         "prio": 100,
         "proc": [ "chrome", "msedge" ],
-        "titleHas": [ "Meet", "Google Meet", "meet.google.com" ]
+        "title": [ "*Meet*", "*Google Meet*", "*meet.google.com*" ]
       },
       {
         "id": "teams",
         "prio": 95,
         "proc": [ "msedgewebview2", "ms-teams" ],
         "classIs": [ "TeamsWebView" ],
-        "titleEndsWith": [ " | Microsoft Teams" ]
+        "title": [ "* | Microsoft Teams" ]
       },
       {
         "id": "telegram",
         "prio": 80,
         "proc": [ "telegram" ],
-        "titleHas": [ "Telegram" ]
+        "title": [ "*Telegram*" ]
       },
       {
         "id": "viber",
         "prio": 75,
         "proc": [ "viber" ],
-        "titleHas": [ "Viber" ]
+        "title": [ "*Viber*" ]
       },
       {
         "id": "whatsapp",
         "prio": 70,
         "proc": [ "whatsapp" ],
-        "titleHas": [ "WhatsApp" ]
+        "title": [ "*WhatsApp*" ]
       },
       {
         "id": "discord",
         "prio": 60,
         "proc": [ "chrome" ],
-        "titleHas": [ "Discord" ]
+        "title": [ "*Discord*" ]
       }
     ]
   },
