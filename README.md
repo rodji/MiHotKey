@@ -1,13 +1,13 @@
 ﻿# MiHotKey
 
-Небольшая Windows-утилита (tray) для привязки триггеров (глобальные хоткеи, WMI-события) к действиям над целевым окном: отправка сочетаний клавиш или запуск программы.
+A small Windows tray utility that binds triggers (global hotkeys, WMI events) to actions on a target window: sending key combinations or launching a program. It also supports custom keyboard keys on the <b>Xiaomi Mi Gaming Laptop</b>.
 
-## Быстрый старт
+## Quick start
 
-- Сборка: `dotnet build MiHotKey.sln -c Release`
-- Запуск из исходников: `dotnet run --project MiHotKeyApp`
-- Конфиг: `MiHotKeyApp/config.json` копируется в выходную папку и читается приложением при старте.
+- Build: `dotnet build MiHotKey.sln -c Release`
+- Run from source: `dotnet run --project MiHotKeyApp`
+- Config: `MiHotKeyApp/config.json` is copied to the output folder and read by the app on startup.
 
-## Конфигурация
+## Configuration
 
-Схема и примеры — в `CONFIG.md`.
+Schema and examples are in `CONFIG.md`.

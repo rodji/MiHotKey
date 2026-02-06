@@ -1,42 +1,42 @@
-﻿# Конфигурация `config.json` (v2)
+﻿# `config.json` Configuration (v2)
 
-Приложение читает `config.json` из папки запуска (это `AppContext.BaseDirectory`). JSON парсится **без учета регистра ключей**, с поддержкой `//`/`/* */` комментариев и trailing commas.
+The app reads `config.json` from the startup folder (this is `AppContext.BaseDirectory`). JSON is parsed **case-insensitively** for keys, with support for `//`/`/* */` comments and trailing commas.
 
-## Что изменилось в v2
+## What's new in v2
 
-- `version: 2` (v1 больше не поддерживается).
-- `routesByTrigger[*]` теперь использует `actionType`/`actionId` вместо `shortcut`.
-- Добавлены `programs` и запуск программ из UI/роутинга.
-- Добавлен `shortcuts[*].send = "messages"` (через `PostMessage`).
-- Добавлен `app.autostart.enabled` (запуск при входе пользователя в Windows через HKCU Run).
-- В `targets.rules` добавлены опции матчинга по классу окна (`classIs`) и заголовку окна (`title`, glob-паттерны).
-- В `inputs.wmi` добавлены политики “разрешать ли триггеры при lock/remote” (`sessionPolicy`, `sessionPolicyByEvent`).
-- В `routesByTrigger` поддержано “без правила” (пустой/отсутствующий `rule`) — безусловное действие.
-- Добавлены `audioDevices` и `routesByTrigger.actionType = "Audio"` для управления mute микрофона/динамиков.
-- Добавлены диагностика и пункт tray-меню **Run diagnostics** (логирует окна/аудио/foreground-tracker).
+- `version: 2` (v1 is no longer supported).
+- `routesByTrigger[*]` now uses `actionType`/`actionId` instead of `shortcut`.
+- Added `programs` and program launch from the UI/routing.
+- Added `shortcuts[*].send = "messages"` (via `PostMessage`).
+- Added `app.autostart.enabled` (start on user login via HKCU Run).
+- Added matching options in `targets.rules` by window class (`classIs`) and window title (`title`, glob patterns).
+- Added policies in `inputs.wmi` for "allow triggers while locked/remote" (`sessionPolicy`, `sessionPolicyByEvent`).
+- In `routesByTrigger`, support for "no rule" (empty/missing `rule`) - unconditional action.
+- Added `audioDevices` and `routesByTrigger.actionType = "Audio"` to control mic/speaker mute.
+- Added diagnostics and the tray menu item **Run diagnostics** (logs windows/audio/foreground-tracker).
 
-## Как выбирается файл конфига
+## How the config file is chosen
 
-Алгоритм загрузки:
+Loading algorithm:
 
-1. Всегда сначала читается `config.json` рядом с `.exe` (чтобы узнать `app.configPath`).
-2. Если `app.configPath` указывает на другой путь, загружается уже тот файл и применяется как итоговый конфиг.
+1. Always read `config.json` next to the `.exe` first (to get `app.configPath`).
+2. If `app.configPath` points to another path, that file is loaded and used as the final config.
 
-Это позволяет хранить “основной” конфиг, например, в `%AppData%`, оставив рядом с `.exe` маленький bootstrap-конфиг.
+This lets you keep the "main" config, for example, in `%AppData%`, leaving a small bootstrap config next to the `.exe`.
 
-## Структура верхнего уровня
+## Top-level structure
 
-- `version` — обязательно `2`.
-- `app` — поведение приложения (фокус, выбор окна, тайминги отправки).
-- `tray` — видимость пунктов меню в трее.
-- `logging` — уровни логирования.
-- `inputs` — источники событий (hotkeys, WMI).
-- `bindings` — привязка `triggerId -> [events...]` для WMI-событий.
-- `targets` — правила поиска целевого окна.
-- `shortcuts` — словарь сочетаний клавиш для отправки.
-- `programs` — словарь программ, которые можно запускать.
-- `audioDevices` — действия с аудиоустройствами (mute/unmute/toggle).
-- `routesByTrigger` — что делать для каждой пары (trigger, rule).
+- `version` - must be `2`.
+- `app` - app behavior (focus, window selection, send timings).
+- `tray` - visibility of tray menu items.
+- `logging` - logging levels.
+- `inputs` - event sources (hotkeys, WMI).
+- `bindings` - mapping `triggerId -> [events...]` for WMI events.
+- `targets` - rules for finding the target window.
+- `shortcuts` - dictionary of key combinations to send.
+- `programs` - dictionary of programs that can be launched.
+- `audioDevices` - actions on audio devices (mute/unmute/toggle).
+- `routesByTrigger` - what to do for each (trigger, rule) pair.
 
 ## `app`
 
@@ -57,35 +57,26 @@
 }
 ```
 
-- `configPath` — путь к “основному” конфигу (абсолютный или относительный от папки запуска).
-- `altConfigPathHint` — подсказка в логах (на поведение не влияет).
-- `logBufferSize` — размер кольцевого буфера логов (10..10000).
-- `foregroundTrackingEnabled` — включить трекинг активного/предыдущего окна.
-- `foregroundHistorySize` — сколько окон хранить в истории (0..1000).
-- `targetSelectionMode`:
-  - `ForegroundThenPrevious` — сначала текущее foreground окно, затем предыдущее.
-  - `ForegroundOnly` — только foreground.
-  - `AlwaysPrevious` — только предыдущее.
-- `focusPolicy`:
-  - `ActivateTargetTemporarily` — временно активировать целевое окно для отправки (потом вернуть фокус).
-  - `NoFocusChange` — не менять фокус (только если целевое окно уже foreground).
-- `sendTimingMs` — паузы (мс) между нажатиями/отжатиями модификаторов и основной клавиши.
-- `autostart.enabled` — включить автозапуск при входе пользователя в Windows.
-  - Реализация: запись в `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` значения `MiHotKey` со строкой запуска текущего `.exe`.
-  - Можно переключать из tray-меню **Autostart** — приложение обновит `config.json` и перезагрузит конфиг.
-- `diagnostics.sortByTabOrder` — порядок вывода top-level окон в диагностике:
-  - `true` — порядок Z (как вкладки Alt-Tab),
-  - `false` — сортировка по `proc`/`title`.
+- `configPath` - path to the "main" config (absolute or relative to the startup folder).
+- `altConfigPathHint` - hint in logs (does not affect behavior).
+- `logBufferSize` - size of the log ring buffer (10..10000).
+- `foregroundTrackingEnabled` - enable tracking of the current/previous window.
+- `foregroundHistorySize` - how many windows to keep in history (0..1000).
+- `targetSelectionMode` - target selection strategy. Values: `ForegroundThenPrevious` - first the current foreground window, then the previous one; `ForegroundOnly` - only the foreground; `AlwaysPrevious` - only the previous.
+- `focusPolicy` - focus behavior when sending. Values: `ActivateTargetTemporarily` - temporarily activate the target window to send (then restore focus); `NoFocusChange` - do not change focus (only if the target window is already foreground).
+- `sendTimingMs` - delays (ms) between modifier down/up and the main key.
+- `autostart.enabled` - enable autostart on Windows user login. Implementation: write `MiHotKey` to `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` with the current `.exe` command line. Can be toggled from the tray menu **Autostart**; the app updates `config.json` and reloads the config.
+- `diagnostics.sortByTabOrder` - ordering of top-level windows in diagnostics. Values: `true` - Z order (Alt-Tab order); `false` - sort by `proc`/`title`.
 
 ## `tray`
 
-Управляет видимостью пунктов меню.
+Controls visibility of tray menu items.
 
 ```jsonc
 { "tray": { "reloadConfig": true, "showLog": true, "toggleForegroundTracking": true, "runDiagnostics": true, "exit": true } }
 ```
 
-- `runDiagnostics` — показать пункт **Run diagnostics** (логирует top-level окна, аудиоустройства и состояние foreground-tracker).
+- `runDiagnostics` - show the **Run diagnostics** item (logs top-level windows, audio devices, and foreground-tracker state).
 
 ## `logging`
 
@@ -101,29 +92,26 @@
 }
 ```
 
-- `level` — базовый уровень.
-- `overrides` — переопределения по категориям.
-- `maxMessageLength` — обрезка сообщений в UI-логе.
-- `showConfigPathsInLog` — логировать пути конфига при reload.
+- `level` - base level.
+- `overrides` - per-category overrides.
+- `maxMessageLength` - truncate messages in the UI log.
+- `showConfigPathsInLog` - log config paths on reload.
 
 ## `inputs.hotkeys`
 
-Глобальные хоткеи (через `RegisterHotKey`). Регистрируются с `MOD_NOREPEAT` (длинное удержание не спамит повтором).
+Global hotkeys (via `RegisterHotKey`). Registered with `MOD_NOREPEAT` (long press does not spam repeats).
 
 ```jsonc
 { "inputs": { "hotkeys": [ { "id": "mute", "keys": "Ctrl+Alt+M" } ] } }
 ```
 
-Формат `keys`:
-
-- Модификаторы: `Ctrl`, `Alt`, `Shift`, `Win` (в любом порядке).
-- Основная клавиша: буква/цифра (`M`, `1`) или имя из `System.Windows.Forms.Keys` (например `F12`, `Escape`).
+`keys` format: modifiers `Ctrl`, `Alt`, `Shift`, `Win` (any order). Main key: a letter/digit (`M`, `1`) or a name from `System.Windows.Forms.Keys` (for example, `F12`, `Escape`).
 
 ## `inputs.wmi` + `bindings`
 
-WMI-источник генерирует “события” (строки), которые дальше мапятся в `triggerId` через `bindings`.
+The WMI source generates "events" (strings), which are then mapped to `triggerId` via `bindings`.
 
-Пример:
+Example:
 
 ```jsonc
 {
@@ -151,26 +139,21 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-- `map` — строковый код → имя события.
-- `bindings` — `triggerId` → список событий, которые должны вызвать этот trigger.
-- `sessionPolicy` — политика “когда разрешено принимать события” для этого источника.
-- `sessionPolicyByEvent` — переопределение политики для конкретного `mappedEvent` (ключи — это **значения** из `map`, например `triangle.down`).
+- `map` - string code to event name.
+- `bindings` - `triggerId` to list of events that should trigger that `triggerId`.
+- `sessionPolicy` - policy for "when it is allowed to accept events" for this source.
+- `sessionPolicyByEvent` - policy override for a specific `mappedEvent` (keys are **values** from `map`, for example `triangle.down`).
 
-`sessionPolicy` / `sessionPolicyByEvent`:
+`sessionPolicy` / `sessionPolicyByEvent` values: `Any` - always accept; `RequireUnlocked` - do not accept while the workstation is locked; `RequireLocalSession` - do not accept if the app is running in a Remote Desktop (RDP) session; `RequireUnlockedLocalSession` - combination of both conditions.
 
-- `Any` — всегда принимать.
-- `RequireUnlocked` — не принимать, пока рабочая станция залочена.
-- `RequireLocalSession` — не принимать, если приложение запущено в Remote Desktop (RDP) сессии.
-- `RequireUnlockedLocalSession` — комбинация двух условий.
+Notes:
 
-Примечания:
-
-- “Locked” определяется по событиям `SessionLock`/`SessionUnlock` текущей пользовательской сессии.
-- “Remote” определяется по `SystemInformation.TerminalServerSession` (т.е. RDP-сессия).
+- "Locked" is determined by `SessionLock`/`SessionUnlock` events of the current user session.
+- "Remote" is determined by `SystemInformation.TerminalServerSession` (i.e., RDP session).
 
 ## `targets.rules`
 
-Правила поиска целевого окна. При срабатывании триггера приложение перебирает кандидатов (см. `targetSelectionMode`) и выбирает первое окно, которое матчится под правило.
+Rules for finding the target window. When a trigger fires, the app iterates candidates (see `targetSelectionMode`) and picks the first window that matches the rule.
 
 ```jsonc
 {
@@ -188,24 +171,21 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-- `id` — идентификатор правила (используется в `routesByTrigger`).
-- `prio` — приоритет (больше = важнее).
-- `proc` — имена процессов без `.exe` (например `chrome`).
-- `classIs` — список допустимых window class name (из `GetClassNameW`).
-- `title` — список паттернов для заголовка окна (OR: достаточно одного совпадения).
-  - Поддерживается glob: `*` = любые символы, `?` = один символ, `\*`/`\?` = литеральные.
-  - Если в паттерне **нет** `*`/`?`, он трактуется как “подстрока” (аналог `*text*`).
-  - Для точного совпадения можно использовать префикс `=`: например `=Meeting`.
+- `id` - rule identifier (used in `routesByTrigger`).
+- `prio` - priority (higher = more important).
+- `proc` - process names without `.exe` (for example `chrome`).
+- `classIs` - list of allowed window class names (from `GetClassNameW`).
+- `title` - list of patterns for the window title (OR: one match is enough). Glob support: `*` = any chars, `?` = one char, `\\*`/`\\?` = literal. If a pattern contains no `*`/`?`, it is treated as a substring (equivalent to `*text*`). For an exact match, use the `=` prefix, for example `=Meeting`.
 
-Матчинг:
+Matching:
 
-- сначала `proc` (обязательно),
-- затем (если задано) `classIs`,
-- затем (если задано) `title`.
+- first `proc` (required),
+- then (if set) `classIs`,
+- then (if set) `title`.
 
 ## `shortcuts`
 
-Словарь “сочетание клавиш” → как отправлять.
+Dictionary of "key combination" to how to send.
 
 ```jsonc
 {
@@ -215,18 +195,13 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-`send`:
+`send` values: `scan` - `SendInput` by scan-code (usually **layout-independent**; requires the key to be in the scan-code mapping; currently mapping exists for A..Z). `vk` - `SendInput` by virtual key (**layout/language-dependent** for the active input). `messages` - send `WM_KEYDOWN/WM_KEYUP` via `PostMessage` to the target window **without changing focus** (does not work in every app, but often helps when modifier conflicts with a global hotkey). `global` - `SendInput` without focusing the window (like `scan`), but only if the target window exists among top-level windows (useful for apps that register global hotkeys themselves).
 
-- `scan` — `SendInput` по scan-code (обычно **не зависит от раскладки**; требует, чтобы клавиша была в маппинге scan-кодов; сейчас маппинг есть для A..Z).
-- `vk` — `SendInput` по virtual key (**зависит от раскладки/языка** активного ввода).
-- `messages` — отправка `WM_KEYDOWN/WM_KEYUP` через `PostMessage` в целевое окно **без смены фокуса** (работает не во всех приложениях, но часто помогает при конфликте модификаторов с глобальным хоткеем).
-- `global` — `SendInput` без фокуса в окно (как `scan`), но выполняется только если целевое окно по правилам существует среди top-level окон (подходит для приложений, которые сами регистрируют глобальные хоткеи).
-
-Формат `keys` такой же, как в `inputs.hotkeys` (модификаторы: `Ctrl`, `Alt`, `Shift`, `Win`).
+The `keys` format is the same as in `inputs.hotkeys` (modifiers: `Ctrl`, `Alt`, `Shift`, `Win`).
 
 ## `programs`
 
-Словарь программ, которые можно запускать (из tray-меню `Run` или через роутинг).
+Dictionary of programs that can be launched (from the tray menu `Run` or via routing).
 
 ```jsonc
 {
@@ -245,26 +220,22 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-Поля:
+Fields:
 
-- `title` — имя в UI (если пусто — показывается `id`).
-- `file` — путь/команда. Поддерживаются переменные окружения (`%ComSpec%`, `%AppData%`).
-  - если путь относительный (содержит `.` или `\\`/`/`), он резолвится относительно папки запуска;
-  - иначе передается как есть (например `notepad.exe` ищется через PATH).
-- `args` — аргументы командной строки (с `%VAR%`).
-- `workdir` — рабочая папка (аналогично `file`).
-- `useShellExecute`:
-  - `true` — запуск через shell (как в Explorer).
-  - `false` — прямой запуск процесса (доступны `env`, захват stdout/stderr).
-- `hidden` — попытаться запустить скрыто (актуально для консольных при `useShellExecute=false`).
-- `captureOutput` — логировать stdout/stderr после завершения (только при `useShellExecute=false`).
-- `env` — переменные окружения (только при `useShellExecute=false`).
+- `title` - name in UI (if empty, `id` is shown).
+- `file` - path/command. Supports environment variables (`%ComSpec%`, `%AppData%`). If the path is relative (contains `.` or `\\`/`/`), it is resolved relative to the startup folder; otherwise it is passed as-is (for example `notepad.exe` is found via PATH).
+- `args` - command-line arguments (with `%VAR%`).
+- `workdir` - working folder (same resolution rules as `file`).
+- `useShellExecute` - launch via shell (like in Explorer) if `true`; direct process start (with `env` and stdout/stderr capture) if `false`.
+- `hidden` - attempt to launch hidden (relevant for console apps when `useShellExecute=false`).
+- `captureOutput` - log stdout/stderr after completion (only when `useShellExecute=false`).
+- `env` - environment variables (only when `useShellExecute=false`).
 
-В лог пишется: старт, завершение, `exit code`, stdout/stderr (обрезаются до разумного размера).
+The log includes: start, completion, `exit code`, stdout/stderr (trimmed to a reasonable size).
 
 ## `audioDevices`
 
-Действия над аудиоустройствами через Core Audio (Windows).
+Actions on audio devices via Core Audio (Windows).
 
 ```jsonc
 {
@@ -279,29 +250,21 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-Поля:
+Fields:
 
-- `flow` — тип потока:
-  - `Capture` — микрофоны (input).
-  - `Render` — динамики/наушники (output).
-- `role` — роль девайса:
-  - `Console` — “обычное” устройство по умолчанию.
-  - `Multimedia` — мультимедийное.
-  - `Communications` — коммуникационное (часто используют Teams/Zoom).
-- `deviceId` — конкретный ID устройства (строка Windows). Если пусто — берется default по `flow`+`role`.
-- `action`:
-  - `ToggleMute` — переключить mute,
-  - `Mute` — включить mute,
-  - `Unmute` — отключить mute.
+- `flow` - stream type. Values: `Capture` - microphones (input); `Render` - speakers/headphones (output).
+- `role` - device role. Values: `Console` - default "general" device; `Multimedia` - multimedia; `Communications` - communications (often used by Teams/Zoom).
+- `deviceId` - specific device ID (Windows string). If empty, the default for `flow`+`role` is used.
+- `action` - action to perform. Values: `ToggleMute` - toggle mute; `Mute` - mute; `Unmute` - unmute.
 
-Примечания:
+Notes:
 
-- Если `deviceId` задан, `role` игнорируется.
-- Мут применяется на уровне устройства, это влияет на все приложения, использующие этот девайс.
+- If `deviceId` is set, `role` is ignored.
+- Mute is applied at the device level and affects all apps using that device.
 
 ## `routesByTrigger`
 
-Главная таблица маршрутизации: для каждого `triggerId` задается список правил, и для каждого правила — действие.
+Main routing table: for each `triggerId`, a list of rules is defined, and for each rule an action is configured.
 
 ```jsonc
 {
@@ -317,15 +280,11 @@ WMI-источник генерирует “события” (строки), �
 }
 ```
 
-- `rule` — `targets.rules[].id`. Если поле отсутствует или пустое (`""`) — действие выполняется **безусловно**, без матчинга окна.
-- `actionType`:
-  - `Shortcut` — отправить `shortcuts[actionId]`.
-  - `Program` — запустить `programs[actionId]`.
-  - `Audio` — выполнить действие из `audioDevices[actionId]`.
-- `actionId` — id действия (ключ в `shortcuts`, `programs` или `audioDevices`).
+- `rule` - `targets.rules[].id`. If the field is missing or empty (`""`), the action is executed **unconditionally**, without window matching.
+- `actionType` - action type. Values: `Shortcut` - send `shortcuts[actionId]`; `Program` - launch `programs[actionId]`; `Audio` - perform action from `audioDevices[actionId]`.
+- `actionId` - action id (key in `shortcuts`, `programs`, or `audioDevices`).
 
-Важно:
+Important:
 
-- `triggerId` должен существовать в `inputs.hotkeys[].id` **или** в `bindings` (как ключ).
-  - например, для `openNotepad` выше нужно добавить `inputs.hotkeys` с `id: "openNotepad"` или сделать привязку через `bindings`.
-- Для первого найденного подходящего окна выполняется действие и обработка завершается.
+- `triggerId` must exist in `inputs.hotkeys[].id` **or** in `bindings` (as a key). For example, for `openNotepad` above you need to add `inputs.hotkeys` with `id: "openNotepad"` or add a binding via `bindings`.
+- The first matching window executes the action and handling stops.
