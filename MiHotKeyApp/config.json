@@ -94,8 +94,10 @@
   "bindings": {
     "mute": [
       "circle.down",
-      "droplett.down",
       "square.down"
+    ],
+    "mic.toggle": [
+      "droplett.down"
     ],
     "notepad": [
       "triangle.down"
@@ -197,6 +199,9 @@
       { "rule": "viber",    "actionType": "Shortcut", "actionId": "viber.mute" },
       { "rule": "whatsapp", "actionType": "Shortcut", "actionId": "whatsapp.mute" },
       { "rule": "discord",  "actionType": "Shortcut", "actionId": "discord.mute" }
+    ],
+    "mic.toggle": [
+      { "actionType": "Audio", "actionId": "mic.toggle" }
     ],
     "notepad": [
       { "actionType": "Program", "actionId": "notepad" }
