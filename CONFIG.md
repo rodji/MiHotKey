@@ -30,7 +30,7 @@ This lets you keep the "main" config, for example, in `%AppData%`, leaving a sma
 - `app` - app behavior (focus, window selection, send timings).
 - `tray` - visibility of tray menu items.
 - `logging` - logging levels.
-- `inputs` - event sources (hotkeys, WMI).
+- `inputs` - event sources (hotkeys, WMI, Logitech Raw Input/HID).
 - `bindings` - mapping `triggerId -> [events...]` for WMI events.
 - `targets` - rules for finding the target window.
 - `shortcuts` - dictionary of key combinations to send.
@@ -107,9 +107,9 @@ Global hotkeys (via `RegisterHotKey`). Registered with `MOD_NOREPEAT` (long pres
 
 `keys` format: modifiers `Ctrl`, `Alt`, `Shift`, `Win` (any order). Main key: a letter/digit (`M`, `1`) or a name from `System.Windows.Forms.Keys` (for example, `F12`, `Escape`).
 
-## `inputs.wmi` + `bindings`
+## `inputs.wmi` / `inputs.logi` + `bindings`
 
-The WMI source generates "events" (strings), which are then mapped to `triggerId` via `bindings`.
+The WMI and Logitech sources generate "events" (strings), which are then mapped to `triggerId` via `bindings`.
 
 Example:
 
@@ -150,6 +150,59 @@ Notes:
 
 - "Locked" is determined by `SessionLock`/`SessionUnlock` events of the current user session.
 - "Remote" is determined by `SystemInformation.TerminalServerSession` (i.e., RDP session).
+
+## `inputs.logi` + `bindings` (Logitech keyboards / HID)
+
+This source listens to Windows Raw Input and can map either keyboard scan/vk events or raw HID report bytes to events.
+
+It is intended for Logitech devices (`VID_046D`) such as MX Keys. For programmable keys that require HID++ diversion, use Logitech Options+/Solaar to divert the key first; MiHotKey currently listens for the resulting input reports and maps them.
+
+Example (diagnostic-first):
+
+```jsonc
+{
+  "inputs": {
+    "logi": [
+      {
+        "id": "mxkeys",
+        "kind": "Hid",
+        "vendorId": "046D",
+        "productId": "B35B",
+        "usagePage": 65280,
+        "usage": 1,
+        "devicePathContains": [ "VID_046D&PID_B35B" ],
+        "map": {
+          "hid:hex:11FF0101*": "mx.smartactions1.down",
+          "hid:hex:11FF0100*": "mx.smartactions1.up"
+        },
+        "logRaw": true,
+        "repeatHandling": "firstDownOnlyUntilUp",
+        "debounceMs": 40
+      }
+    ]
+  },
+  "bindings": {
+    "mute": [ "mx.smartactions1.down" ]
+  }
+}
+```
+
+Mapping keys in `inputs.logi[].map`:
+
+- Keyboard messages: `kbd:vk:0xAF.down`, `kbd:vk:175.down`, `kbd:scan:0x6A.down`, `kbd:scan:0x6A.e0.up`
+- Raw HID reports: `hid:hex:11FF010100000000`
+- Prefix match is supported with a trailing `*` (for example `hid:hex:11FF01*`)
+
+Fields:
+
+- `id` - source id (for logs only; routing still goes via `bindings`)
+- `kind` - `Any`, `Keyboard`, or `Hid`
+- `vendorId` / `productId` - hex USB IDs (default vendor is Logitech `046D`)
+- `devicePathContains` - optional substrings to narrow to one interface (OR match)
+- `usagePage` / `usage` - optional Raw Input HID top-level collection filter (integers, often useful for vendor-defined HID++ channels)
+- `map` - raw pattern -> event
+- `logRaw` - log every matching/raw report for discovery
+- `sessionPolicy`, `sessionPolicyByEvent`, `repeatHandling`, `debounceMs` - same semantics as `inputs.wmi`
 
 ## `targets.rules`
 

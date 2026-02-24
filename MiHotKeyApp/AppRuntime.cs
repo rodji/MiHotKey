@@ -5,6 +5,7 @@ using MiHotKeyApp.Audio;
 using MiHotKeyApp.Execution;
 using MiHotKeyApp.Input;
 using MiHotKeyApp.Input.Hotkey;
+using MiHotKeyApp.Input.Logi;
 using MiHotKeyApp.Input.Wmi;
 using MiHotKeyApp.Logging;
 using MiHotKeyApp.Routing;
@@ -38,6 +39,7 @@ internal sealed class AppRuntime : IDisposable
 
     private readonly GlobalHotkeySource _hotkeys;
     private readonly WmiTriggerSource _wmi;
+    private readonly LogiTriggerSource _logi;
     private readonly TriggerDispatcher _dispatcher;
 
     private AppConfig _config;
@@ -85,8 +87,9 @@ internal sealed class AppRuntime : IDisposable
 
         _hotkeys = new GlobalHotkeySource(_loggerFactory.CreateLogger(LogCategories.InputHotkey));
         _wmi = new WmiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputWmi), _session);
+        _logi = new LogiTriggerSource(_loggerFactory.CreateLogger(LogCategories.InputLogi), _session);
 
-        _dispatcher = new TriggerDispatcher(ui, _loggerFactory, _hotkeys, _wmi);
+        _dispatcher = new TriggerDispatcher(ui, _loggerFactory, _hotkeys, _wmi, _logi);
         _dispatcher.TriggerFired += OnTrigger;
 
         _config = new AppConfig();

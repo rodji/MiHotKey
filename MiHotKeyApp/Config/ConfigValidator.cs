@@ -178,6 +178,56 @@ internal static class ConfigValidator
             }
         }
 
+        foreach (var logi in cfg.Inputs.Logi)
+        {
+            if (string.IsNullOrWhiteSpace(logi.Id))
+            {
+                throw new InvalidDataException("inputs.logi[] must have id");
+            }
+
+            if (logi.Map.Count == 0)
+            {
+                throw new InvalidDataException($"inputs.logi[{logi.Id}].map must not be empty");
+            }
+
+            if (!string.IsNullOrWhiteSpace(logi.VendorId) && !TryParseHexWord(logi.VendorId, out _))
+            {
+                throw new InvalidDataException($"inputs.logi[{logi.Id}].vendorId must be hex (for example '046D')");
+            }
+
+            if (!string.IsNullOrWhiteSpace(logi.ProductId) && !TryParseHexWord(logi.ProductId, out _))
+            {
+                throw new InvalidDataException($"inputs.logi[{logi.Id}].productId must be hex (for example 'B35B')");
+            }
+
+            if (logi.UsagePage is < 0 or > 0xFFFF)
+            {
+                throw new InvalidDataException($"inputs.logi[{logi.Id}].usagePage must be 0..65535");
+            }
+
+            if (logi.Usage is < 0 or > 0xFFFF)
+            {
+                throw new InvalidDataException($"inputs.logi[{logi.Id}].usage must be 0..65535");
+            }
+
+            if (logi.SessionPolicyByEvent.Count > 0)
+            {
+                var knownEvents = new HashSet<string>(logi.Map.Values, StringComparer.OrdinalIgnoreCase);
+                foreach (var (ev, _) in logi.SessionPolicyByEvent)
+                {
+                    if (string.IsNullOrWhiteSpace(ev))
+                    {
+                        throw new InvalidDataException($"inputs.logi[{logi.Id}].sessionPolicyByEvent has empty event key");
+                    }
+
+                    if (!knownEvents.Contains(ev))
+                    {
+                        throw new InvalidDataException($"inputs.logi[{logi.Id}].sessionPolicyByEvent event not found in map values: {ev}");
+                    }
+                }
+            }
+        }
+
         foreach (var (id, sc) in cfg.Shortcuts)
         {
             var parsed = ShortcutParser.Parse(sc.Keys);
@@ -186,5 +236,16 @@ internal static class ConfigValidator
                 throw new InvalidDataException($"shortcuts['{id}'] uses send=scan/global but key '{parsed.Key}' has no scan code mapping");
             }
         }
+    }
+
+    private static bool TryParseHexWord(string value, out ushort parsed)
+    {
+        var s = value.Trim();
+        if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            s = s[2..];
+        }
+
+        return ushort.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out parsed);
     }
 }

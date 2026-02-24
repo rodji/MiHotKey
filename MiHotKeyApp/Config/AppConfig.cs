@@ -155,6 +155,9 @@ internal sealed class InputsSection
 
     [JsonPropertyName("wmi")]
     public WmiInputConfig[] Wmi { get; init; } = [];
+
+    [JsonPropertyName("logi")]
+    public LogiInputConfig[] Logi { get; init; } = [];
 }
 
 internal sealed class HotkeyInputConfig
@@ -198,6 +201,57 @@ internal sealed class WmiInputConfig
 
     [JsonPropertyName("debounceMs")]
     public int DebounceMs { get; init; } = 40;
+}
+
+internal sealed class LogiInputConfig
+{
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = "";
+
+    [JsonPropertyName("kind")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public LogiInputKind Kind { get; init; } = LogiInputKind.Any;
+
+    [JsonPropertyName("vendorId")]
+    public string VendorId { get; init; } = "046D";
+
+    [JsonPropertyName("productId")]
+    public string ProductId { get; init; } = "";
+
+    [JsonPropertyName("devicePathContains")]
+    public string[] DevicePathContains { get; init; } = [];
+
+    [JsonPropertyName("usagePage")]
+    public int? UsagePage { get; init; }
+
+    [JsonPropertyName("usage")]
+    public int? Usage { get; init; }
+
+    [JsonPropertyName("map")]
+    public Dictionary<string, string> Map { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    [JsonPropertyName("sessionPolicy")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public InputSessionPolicy SessionPolicy { get; init; } = InputSessionPolicy.Any;
+
+    [JsonPropertyName("sessionPolicyByEvent")]
+    public Dictionary<string, InputSessionPolicy> SessionPolicyByEvent { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    [JsonPropertyName("repeatHandling")]
+    public string RepeatHandling { get; init; } = "firstDownOnlyUntilUp";
+
+    [JsonPropertyName("debounceMs")]
+    public int DebounceMs { get; init; } = 40;
+
+    [JsonPropertyName("logRaw")]
+    public bool LogRaw { get; init; }
+}
+
+internal enum LogiInputKind
+{
+    Any,
+    Keyboard,
+    Hid,
 }
 
 internal enum InputSessionPolicy

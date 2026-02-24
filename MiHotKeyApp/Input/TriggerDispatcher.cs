@@ -3,6 +3,7 @@ namespace MiHotKeyApp.Input;
 using MiHotKeyApp.Config;
 using MiHotKeyApp.Logging;
 using MiHotKeyApp.Input.Hotkey;
+using MiHotKeyApp.Input.Logi;
 using MiHotKeyApp.Input.Wmi;
 using Microsoft.Extensions.Logging;
 
@@ -11,9 +12,11 @@ internal sealed class TriggerDispatcher : IDisposable
     private readonly SynchronizationContext _ui;
     private readonly ILogger _logHotkey;
     private readonly ILogger _logWmi;
+    private readonly ILogger _logLogi;
     private readonly ILogger _logTrigger;
     private readonly GlobalHotkeySource _hotkeys;
     private readonly WmiTriggerSource _wmi;
+    private readonly LogiTriggerSource _logi;
 
     private Dictionary<string, string[]> _eventToTriggers = new(StringComparer.OrdinalIgnoreCase);
     private bool _started;
@@ -22,17 +25,21 @@ internal sealed class TriggerDispatcher : IDisposable
         SynchronizationContext ui,
         ILoggerFactory loggerFactory,
         GlobalHotkeySource hotkeys,
-        WmiTriggerSource wmi)
+        WmiTriggerSource wmi,
+        LogiTriggerSource logi)
     {
         _ui = ui;
         _logHotkey = loggerFactory.CreateLogger(LogCategories.InputHotkey);
         _logWmi = loggerFactory.CreateLogger(LogCategories.InputWmi);
+        _logLogi = loggerFactory.CreateLogger(LogCategories.InputLogi);
         _logTrigger = loggerFactory.CreateLogger(LogCategories.Trigger);
         _hotkeys = hotkeys;
         _wmi = wmi;
+        _logi = logi;
 
         _hotkeys.HotkeyPressed += OnHotkeyPressed;
         _wmi.EventReceived += OnWmiEventReceived;
+        _logi.EventReceived += OnLogiEventReceived;
     }
 
     public event Action<string>? TriggerFired;
@@ -44,13 +51,16 @@ internal sealed class TriggerDispatcher : IDisposable
         if (_started)
         {
             _wmi.Stop();
+            _logi.Stop();
         }
 
         _wmi.SetSubscriptions(cfg.Inputs.Wmi);
+        _logi.SetSubscriptions(cfg.Inputs.Logi);
 
         if (_started)
         {
             _wmi.Start();
+            _logi.Start();
         }
     }
 
@@ -58,6 +68,7 @@ internal sealed class TriggerDispatcher : IDisposable
     {
         _hotkeys.Start();
         _wmi.Start();
+        _logi.Start();
         _started = true;
     }
 
@@ -65,8 +76,10 @@ internal sealed class TriggerDispatcher : IDisposable
     {
         _hotkeys.HotkeyPressed -= OnHotkeyPressed;
         _wmi.EventReceived -= OnWmiEventReceived;
+        _logi.EventReceived -= OnLogiEventReceived;
         _hotkeys.Dispose();
         _wmi.Dispose();
+        _logi.Dispose();
     }
 
     private static Dictionary<string, string[]> BuildEventToTriggers(Dictionary<string, string[]> bindings)
@@ -98,6 +111,21 @@ internal sealed class TriggerDispatcher : IDisposable
     private void OnWmiEventReceived(string sourceId, int code, string mappedEvent)
     {
         _logWmi.LogInformation("src={src} code={code} mapped={mapped}", sourceId, code, mappedEvent);
+
+        if (!_eventToTriggers.TryGetValue(mappedEvent, out var triggers) || triggers.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var triggerId in triggers)
+        {
+            FireTrigger(triggerId);
+        }
+    }
+
+    private void OnLogiEventReceived(string sourceId, string raw, string mappedEvent)
+    {
+        _logLogi.LogInformation("src={src} raw={raw} mapped={mapped}", sourceId, raw, mappedEvent);
 
         if (!_eventToTriggers.TryGetValue(mappedEvent, out var triggers) || triggers.Length == 0)
         {
