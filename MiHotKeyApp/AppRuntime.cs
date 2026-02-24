@@ -49,7 +49,7 @@ internal sealed class AppRuntime : IDisposable
         _baseDir = baseDir;
         _configStore = new ConfigStore(baseDir);
 
-        _logBuffer = new RingLogBuffer(100);
+        _logBuffer = new RingLogBuffer(new AppConfig().App.LogBufferSize);
         _logProvider = new RingBufferLoggerProvider(_logBuffer, new LoggingSection());
         _loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(b =>
         {

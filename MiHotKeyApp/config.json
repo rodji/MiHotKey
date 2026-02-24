@@ -5,7 +5,7 @@
     "configPath": ".\\config.json",
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
 
-    "logBufferSize": 100,
+    "logBufferSize": 5000,
     "foregroundTrackingEnabled": true,
     "foregroundHistorySize": 10,
     "targetSelectionMode": "ForegroundThenPrevious",
@@ -43,7 +43,7 @@
       "Config": "Information"
     },
     "includeScopes": false,
-    "maxMessageLength": 300,
+    "maxMessageLength": 5000,
     "showConfigPathsInLog": true
   },
 
@@ -110,8 +110,9 @@
       {
         "id": "meet",
         "prio": 100,
-        "proc": [ "chrome", "msedge" ],
-        "title": [ "*Meet*", "*Google Meet*", "*meet.google.com*" ]
+        "proc": [ "chrome" ],
+        "title": [ "Meet – * - Google Chrome" ],
+        "classIs": [ "Chrome_WidgetWin_1" ]
       },
       {
         "id": "teams",
@@ -148,12 +149,12 @@
   },
 
   "shortcuts": {
-    "meet.mute":     { "keys": "Ctrl+D",       "send": "messages" },
+    "meet.mute":     { "keys": "Ctrl+D",       "send": "scan" },
     "teams.mute":    { "keys": "Win+Alt+K",    "send": "global" },
     "telegram.mute": { "keys": "Ctrl+M",       "send": "messages" },
     "viber.mute":    { "keys": "Ctrl+M",       "send": "messages" },
     "whatsapp.mute": { "keys": "Ctrl+Shift+M", "send": "messages" },
-    "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "messages" }
+    "discord.mute":  { "keys": "Ctrl+Shift+M", "send": "scan" }
   },
 
   "programs": {

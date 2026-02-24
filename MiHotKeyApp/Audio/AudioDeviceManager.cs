@@ -340,7 +340,7 @@ internal sealed class AudioDeviceManager
     }
 
     [ComImport]
-    [Guid("0BD7A1BE-7A1A-44DB-8397-C0A0B9B3E1F9")]
+    [Guid("0BD7A1BE-7A1A-44DB-8397-C0A0B9B3E1F1")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDeviceCollection
     {

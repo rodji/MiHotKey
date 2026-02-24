@@ -4,6 +4,9 @@ using MiHotKeyApp.Native;
 
 internal sealed class FocusController
 {
+    private const int ForegroundSwitchTimeoutMs = 300;
+    private const int ForegroundPollDelayMs = 10;
+
     public bool TryActivateTemporarily(nint targetHwnd, Func<bool> action)
     {
         var prev = User32.GetForegroundWindow();
@@ -17,6 +20,10 @@ internal sealed class FocusController
             if (prev != targetHwnd)
             {
                 TryActivateWindow(targetHwnd, prev);
+                if (!WaitForForeground(targetHwnd, ForegroundSwitchTimeoutMs))
+                {
+                    return false;
+                }
             }
 
             return action();
@@ -62,5 +69,21 @@ internal sealed class FocusController
                 User32.AttachThreadInput(currentThread, fgThread, false);
             }
         }
+    }
+
+    private static bool WaitForForeground(nint targetHwnd, int timeoutMs)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (User32.GetForegroundWindow() == targetHwnd)
+            {
+                return true;
+            }
+
+            Thread.Sleep(ForegroundPollDelayMs);
+        }
+
+        return User32.GetForegroundWindow() == targetHwnd;
     }
 }

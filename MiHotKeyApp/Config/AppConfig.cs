@@ -48,7 +48,7 @@ internal sealed class AppSection
     public string AltConfigPathHint { get; init; } = @"%AppData%\MiHotKey\config.json";
 
     [JsonPropertyName("logBufferSize")]
-    public int LogBufferSize { get; init; } = 100;
+    public int LogBufferSize { get; init; } = 5000;
 
     [JsonPropertyName("foregroundTrackingEnabled")]
     public bool ForegroundTrackingEnabled { get; init; } = true;
@@ -142,7 +142,7 @@ internal sealed class LoggingSection
     public bool IncludeScopes { get; init; } = false;
 
     [JsonPropertyName("maxMessageLength")]
-    public int MaxMessageLength { get; init; } = 300;
+    public int MaxMessageLength { get; init; } = 5000;
 
     [JsonPropertyName("showConfigPathsInLog")]
     public bool ShowConfigPathsInLog { get; init; } = true;
