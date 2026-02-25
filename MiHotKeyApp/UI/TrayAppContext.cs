@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class TrayAppContext : ApplicationContext
 {
-    private const string AppIconFileName = "tray_keymap_icon.ico";
+    private const string EmbeddedAppIconResourceName = "MiHotKeyApp.tray_keymap_icon.ico";
 
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _reload;
@@ -130,12 +130,14 @@ internal sealed class TrayAppContext : ApplicationContext
 
     private static Icon LoadTrayIcon()
     {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, AppIconFileName);
-        if (File.Exists(iconPath))
+        var assembly = typeof(TrayAppContext).Assembly;
+        using var iconStream = assembly.GetManifestResourceStream(EmbeddedAppIconResourceName);
+        if (iconStream is not null)
         {
             try
             {
-                return new Icon(iconPath);
+                using var icon = new Icon(iconStream);
+                return (Icon)icon.Clone();
             }
             catch
             {
