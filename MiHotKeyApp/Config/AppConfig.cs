@@ -327,9 +327,22 @@ internal sealed class AudioDeviceConfig
     [JsonPropertyName("deviceId")]
     public string DeviceId { get; init; } = "";
 
+    [JsonPropertyName("deviceIds")]
+    public string[] DeviceIds { get; init; } = [];
+
+    [JsonPropertyName("scope")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AudioDeviceScope Scope { get; init; } = AudioDeviceScope.Single;
+
     [JsonPropertyName("action")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AudioAction Action { get; init; } = AudioAction.ToggleMute;
+}
+
+internal enum AudioDeviceScope
+{
+    Single,
+    AllActiveInFlow,
 }
 
 internal enum AudioFlow
