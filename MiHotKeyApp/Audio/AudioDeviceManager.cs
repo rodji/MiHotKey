@@ -46,67 +46,232 @@ internal sealed class AudioDeviceManager
         {
             var flow = ToDataFlow(cfg.Flow);
             var role = ToRole(cfg.Role);
-
-            var deviceId = string.IsNullOrWhiteSpace(cfg.DeviceId) ? "<default>" : cfg.DeviceId;
-
-            if (!TryGetDevice(flow, role, cfg.DeviceId, out var device))
+            var targets = ResolveTargets(cfg, flow);
+            if (targets.Length == 0)
             {
-                _logger.LogWarning("audio device not found id={id} flow={flow} role={role} ctx=\"{ctx}\"", deviceId, cfg.Flow, cfg.Role, context ?? "");
+                _logger.LogWarning("audio no targets id={id} flow={flow} role={role} scope={scope} ctx=\"{ctx}\"", actionId, cfg.Flow, cfg.Role, cfg.Scope, context ?? "");
                 return false;
             }
 
-            if (!TryGetEndpointVolume(device!, out var volume))
+            var states = new List<AudioMuteState>(targets.Length);
+            foreach (var target in targets)
             {
-                _logger.LogWarning("audio endpoint volume not available id={id} flow={flow} role={role} ctx=\"{ctx}\"", deviceId, cfg.Flow, cfg.Role, context ?? "");
-                Release(device);
+                if (!TryGetMuteState(flow, role, cfg, target, context, out var state))
+                {
+                    continue;
+                }
+
+                states.Add(state);
+            }
+
+            if (states.Count == 0)
+            {
+                _logger.LogWarning("audio no writable targets id={id} flow={flow} role={role} scope={scope} ctx=\"{ctx}\"", actionId, cfg.Flow, cfg.Role, cfg.Scope, context ?? "");
                 return false;
             }
 
-            try
+            var targetMute = ResolveTargetMuteState(cfg.Action, states);
+            var successCount = 0;
+
+            foreach (var state in states)
             {
-                if (volume.GetMute(out var isMuted) != 0)
+                if (TrySetMute(flow, role, cfg, state, targetMute, context))
                 {
-                    _logger.LogWarning("audio get mute failed id={id} ctx=\"{ctx}\"", deviceId, context ?? "");
-                    return false;
+                    successCount++;
                 }
+            }
 
-                var target = cfg.Action switch
-                {
-                    AudioAction.ToggleMute => !isMuted,
-                    AudioAction.Mute => true,
-                    AudioAction.Unmute => false,
-                    _ => !isMuted,
-                };
-
-                if (volume.SetMute(target, Guid.Empty) != 0)
-                {
-                    _logger.LogWarning("audio set mute failed id={id} target={target} ctx=\"{ctx}\"", deviceId, target ? 1 : 0, context ?? "");
-                    return false;
-                }
-
+            if (states.Count > 1)
+            {
                 _logger.LogInformation(
-                    "audio mute id={id} action={action} before={before} after={after} flow={flow} role={role} ctx=\"{ctx}\"",
-                    deviceId,
+                    "audio batch id={id} action={action} flow={flow} role={role} scope={scope} targets={targets} ok={ok} after={after} ctx=\"{ctx}\"",
+                    actionId,
                     cfg.Action,
-                    isMuted ? 1 : 0,
-                    target ? 1 : 0,
                     cfg.Flow,
                     cfg.Role,
+                    cfg.Scope,
+                    states.Count,
+                    successCount,
+                    targetMute ? 1 : 0,
                     context ?? "");
+            }
 
-                return true;
-            }
-            finally
-            {
-                Release(volume);
-                Release(device);
-            }
+            return successCount > 0;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "audio execute failed id={id} ctx=\"{ctx}\"", actionId, context ?? "");
             return false;
         }
+    }
+
+    private ResolvedAudioTarget[] ResolveTargets(AudioDeviceConfig cfg, EDataFlow flow)
+    {
+        if (cfg.Scope == AudioDeviceScope.AllActiveInFlow)
+        {
+            return GetActiveTargetsForFlow(flow);
+        }
+
+        if (cfg.DeviceIds.Length > 0)
+        {
+            return cfg.DeviceIds
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(static id => new ResolvedAudioTarget(DeviceId: id, LogId: id))
+                .ToArray();
+        }
+
+        var logId = string.IsNullOrWhiteSpace(cfg.DeviceId) ? "<default>" : cfg.DeviceId;
+        return [new ResolvedAudioTarget(cfg.DeviceId, logId)];
+    }
+
+    private ResolvedAudioTarget[] GetActiveTargetsForFlow(EDataFlow flow)
+    {
+        var enumerator = CreateEnumerator();
+        if (enumerator is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            if (enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, out var collection) != 0 || collection is null)
+            {
+                return [];
+            }
+
+            try
+            {
+                if (collection.GetCount(out var count) != 0 || count == 0)
+                {
+                    return [];
+                }
+
+                var list = new List<ResolvedAudioTarget>((int)count);
+                for (uint i = 0; i < count; i++)
+                {
+                    if (collection.Item(i, out var device) != 0 || device is null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (device.GetId(out var id) != 0 || string.IsNullOrWhiteSpace(id))
+                        {
+                            continue;
+                        }
+
+                        list.Add(new ResolvedAudioTarget(id, id));
+                    }
+                    finally
+                    {
+                        Release(device);
+                    }
+                }
+
+                return list
+                    .DistinctBy(static target => target.DeviceId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            finally
+            {
+                Release(collection);
+            }
+        }
+        finally
+        {
+            Release(enumerator);
+        }
+    }
+
+    private bool TryGetMuteState(EDataFlow flow, ERole role, AudioDeviceConfig cfg, ResolvedAudioTarget target, string? context, out AudioMuteState state)
+    {
+        state = default;
+
+        if (!TryGetDevice(flow, role, target.DeviceId, out var device))
+        {
+            _logger.LogWarning("audio device not found id={id} flow={flow} role={role} ctx=\"{ctx}\"", target.LogId, cfg.Flow, cfg.Role, context ?? "");
+            return false;
+        }
+
+        if (!TryGetEndpointVolume(device!, out var volume))
+        {
+            _logger.LogWarning("audio endpoint volume not available id={id} flow={flow} role={role} ctx=\"{ctx}\"", target.LogId, cfg.Flow, cfg.Role, context ?? "");
+            Release(device);
+            return false;
+        }
+
+        try
+        {
+            if (volume.GetMute(out var isMuted) != 0)
+            {
+                _logger.LogWarning("audio get mute failed id={id} ctx=\"{ctx}\"", target.LogId, context ?? "");
+                return false;
+            }
+
+            state = new AudioMuteState(target.DeviceId, target.LogId, isMuted);
+            return true;
+        }
+        finally
+        {
+            Release(volume);
+            Release(device);
+        }
+    }
+
+    private bool TrySetMute(EDataFlow flow, ERole role, AudioDeviceConfig cfg, AudioMuteState state, bool targetMute, string? context)
+    {
+        if (!TryGetDevice(flow, role, state.DeviceId, out var device))
+        {
+            _logger.LogWarning("audio device not found id={id} flow={flow} role={role} ctx=\"{ctx}\"", state.LogId, cfg.Flow, cfg.Role, context ?? "");
+            return false;
+        }
+
+        if (!TryGetEndpointVolume(device!, out var volume))
+        {
+            _logger.LogWarning("audio endpoint volume not available id={id} flow={flow} role={role} ctx=\"{ctx}\"", state.LogId, cfg.Flow, cfg.Role, context ?? "");
+            Release(device);
+            return false;
+        }
+
+        try
+        {
+            if (volume.SetMute(targetMute, Guid.Empty) != 0)
+            {
+                _logger.LogWarning("audio set mute failed id={id} target={target} ctx=\"{ctx}\"", state.LogId, targetMute ? 1 : 0, context ?? "");
+                return false;
+            }
+
+            _logger.LogInformation(
+                "audio mute id={id} action={action} before={before} after={after} flow={flow} role={role} ctx=\"{ctx}\"",
+                state.LogId,
+                cfg.Action,
+                state.IsMuted ? 1 : 0,
+                targetMute ? 1 : 0,
+                cfg.Flow,
+                cfg.Role,
+                context ?? "");
+
+            return true;
+        }
+        finally
+        {
+            Release(volume);
+            Release(device);
+        }
+    }
+
+    private static bool ResolveTargetMuteState(AudioAction action, List<AudioMuteState> states)
+    {
+        return action switch
+        {
+            AudioAction.Mute => true,
+            AudioAction.Unmute => false,
+            AudioAction.ToggleMute when states.Count > 1 => states.Any(static state => !state.IsMuted),
+            AudioAction.ToggleMute => !states[0].IsMuted,
+            _ => !states[0].IsMuted,
+        };
     }
 
     private static bool TryGetDevice(EDataFlow flow, ERole role, string deviceId, out IMMDevice? device)
@@ -321,6 +486,9 @@ internal sealed class AudioDeviceManager
         bool IsDefaultMultimedia,
         bool IsDefaultCommunications);
 
+    private readonly record struct ResolvedAudioTarget(string DeviceId, string LogId);
+    private readonly record struct AudioMuteState(string DeviceId, string LogId, bool IsMuted);
+
     [ComImport]
     [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
     private sealed class MMDeviceEnumerator
@@ -340,7 +508,7 @@ internal sealed class AudioDeviceManager
     }
 
     [ComImport]
-    [Guid("0BD7A1BE-7A1A-44DB-8397-C0A0B9B3E1F1")]
+    [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDeviceCollection
     {

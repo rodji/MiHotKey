@@ -70,6 +70,27 @@ internal static class ConfigValidator
             {
                 throw new InvalidDataException("audioDevices entries must have non-empty id");
             }
+
+            var hasDeviceId = !string.IsNullOrWhiteSpace(audio.DeviceId);
+            var hasDeviceIds = audio.DeviceIds.Any(static value => !string.IsNullOrWhiteSpace(value));
+
+            if (hasDeviceId && hasDeviceIds)
+            {
+                throw new InvalidDataException($"audioDevices['{id}'] cannot set both deviceId and deviceIds");
+            }
+
+            if (audio.Scope == AudioDeviceScope.AllActiveInFlow && (hasDeviceId || hasDeviceIds))
+            {
+                throw new InvalidDataException($"audioDevices['{id}'] scope=AllActiveInFlow cannot be combined with deviceId/deviceIds");
+            }
+
+            foreach (var deviceId in audio.DeviceIds)
+            {
+                if (string.IsNullOrWhiteSpace(deviceId))
+                {
+                    throw new InvalidDataException($"audioDevices['{id}'].deviceIds must not contain empty values");
+                }
+            }
         }
 
         var shortcuts = new HashSet<string>(cfg.Shortcuts.Keys, StringComparer.OrdinalIgnoreCase);

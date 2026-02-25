@@ -294,7 +294,7 @@ internal sealed class AppRuntime : IDisposable
                 d.IsDefaultCommunications ? 1 : 0);
 
             _logDiag.LogInformation(
-                "audio config flow={flow} role=Communications deviceId=\"{id}\" action=ToggleMute",
+                "audio config flow={flow} scope=Single role=Communications deviceId=\"{id}\" action=ToggleMute",
                 d.Flow,
                 d.Id);
         }
