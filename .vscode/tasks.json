@@ -33,7 +33,10 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/MiHotKey.sln",
+                "${workspaceFolder}/MiHotKeyApp/MiHotKeyApp.csproj",
+                "-c",
+                "Release",
+                "/p:PublishProfile=FolderProfile",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
