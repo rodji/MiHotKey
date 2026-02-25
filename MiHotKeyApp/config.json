@@ -90,7 +90,38 @@
       }
     ],
 
-    "logi": []
+    "logi": [
+      // Temporary MX Keys (B35B) diagnostics:
+      // Any matching HID report on these collections will fire "mx.lock.test"
+      // and also be logged (raw bytes) so we can replace this wildcard mapping
+      // with an exact "Lock" button pattern.
+      {
+        "id": "mxkeys.b35b.consumer.test",
+        "kind": "Hid",
+        "vendorId": "046D",
+        "productId": "B35B",
+        "usagePage": 12,
+        "usage": 1,
+        "map": {
+          "hid:hex:*": "mx.lock.test"
+        },
+        "logRaw": true,
+        "debounceMs": 800
+      },
+      {
+        "id": "mxkeys.b35b.vendor.test",
+        "kind": "Hid",
+        "vendorId": "046D",
+        "productId": "B35B",
+        "usagePage": 65347,
+        "usage": 514,
+        "map": {
+          "hid:hex:*": "mx.lock.test"
+        },
+        "logRaw": true,
+        "debounceMs": 800
+      }
+    ]
   },
 
   "bindings": {
@@ -102,7 +133,8 @@
       "droplett.down"
     ],
     "notepad": [
-      "triangle.down"
+      "triangle.down",
+      "mx.lock.test"
     ],
     "console": [
       "hexagon.down"
