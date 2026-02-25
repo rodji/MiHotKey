@@ -76,6 +76,57 @@ internal sealed class RingLogBuffer
         }
     }
 
+    public LogEntry[] SnapshotTail(LogLevel minLevel, int maxCount)
+    {
+        if (maxCount <= 0)
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            if (_count == 0)
+            {
+                return [];
+            }
+
+            var capacity = Math.Min(_count, maxCount);
+            var tail = new LogEntry[capacity];
+            var found = 0;
+
+            // Walk backward from the newest entry and keep only the last matching lines.
+            for (var offset = 1; offset <= _count && found < capacity; offset++)
+            {
+                var idx = _next - offset;
+                if (idx < 0)
+                {
+                    idx += _entries.Length;
+                }
+
+                var entry = _entries[idx];
+                if (entry.Level < minLevel)
+                {
+                    continue;
+                }
+
+                tail[capacity - 1 - found] = entry;
+                found++;
+            }
+
+            if (found == 0)
+            {
+                return [];
+            }
+
+            if (found == capacity)
+            {
+                return tail;
+            }
+
+            return tail[(capacity - found)..].ToArray();
+        }
+    }
+
     private LogEntry[] SnapshotUnsafe()
     {
         if (_count == 0)
@@ -100,4 +151,3 @@ internal sealed class RingLogBuffer
 }
 
 internal readonly record struct LogEntry(long Seq, LogLevel Level, string Line);
-

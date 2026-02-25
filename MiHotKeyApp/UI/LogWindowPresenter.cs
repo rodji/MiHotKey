@@ -5,8 +5,10 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class LogWindowPresenter : IDisposable
 {
+    private const int VisibleLineLimit = 100;
     private readonly RingLogBuffer _buffer;
     private readonly LogWindow _window;
+    private int _refreshQueued;
 
     public LogWindowPresenter(RingLogBuffer buffer)
     {
@@ -38,7 +40,14 @@ internal sealed class LogWindowPresenter : IDisposable
 
     public void Refresh()
     {
-        var entries = _buffer.Snapshot(_window.MinLevel);
+        System.Threading.Interlocked.Exchange(ref _refreshQueued, 0);
+
+        if (_window.IsDisposed)
+        {
+            return;
+        }
+
+        var entries = _buffer.SnapshotTail(_window.MinLevel, VisibleLineLimit);
         var text = string.Join(Environment.NewLine, entries.Select(e => e.Line));
         _window.SetText(text);
     }
@@ -50,9 +59,14 @@ internal sealed class LogWindowPresenter : IDisposable
             return;
         }
 
+        if (System.Threading.Interlocked.Exchange(ref _refreshQueued, 1) == 1)
+        {
+            return;
+        }
+
         if (_window.InvokeRequired)
         {
-            _window.BeginInvoke(Refresh);
+            _window.BeginInvoke((Action)Refresh);
             return;
         }
 
@@ -69,4 +83,3 @@ internal sealed class LogWindowPresenter : IDisposable
         }
     }
 }
-
