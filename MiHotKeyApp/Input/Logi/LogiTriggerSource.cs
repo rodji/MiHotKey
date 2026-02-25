@@ -14,6 +14,7 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
     private readonly SessionState _session;
     private readonly object _gate = new();
     private readonly Dictionary<nint, DeviceMeta> _deviceCache = [];
+    private readonly Dictionary<nint, byte> _lastVendorKeyCodeByDevice = [];
 
     private Subscription[] _subscriptions = [];
     private bool _started;
@@ -54,6 +55,7 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
         lock (_gate)
         {
             _started = false;
+            _lastVendorKeyCodeByDevice.Clear();
         }
     }
 
@@ -145,7 +147,7 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
                         continue;
                     }
 
-                    if (TryMapHid(sub, report, out var raw, out var mappedEvent))
+                    if (TryMapHid(sub, hid.Value.DeviceHandle, report, out var raw, out var mappedEvent))
                     {
                         if (sub.Config.LogRaw)
                         {
@@ -162,7 +164,7 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
                     }
                     else if (sub.Config.LogRaw)
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "{id} raw hid(unmapped) path=\"{path}\" usage=0x{usagePage:X4}/0x{usage:X4} raw={raw}",
                             sub.Config.Id,
                             hidMeta.Name,
@@ -184,6 +186,10 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
         lock (_gate)
         {
             _deviceCache.Remove(deviceHandle);
+            if (code == RawInput.GIDC_REMOVAL)
+            {
+                _lastVendorKeyCodeByDevice.Remove(deviceHandle);
+            }
         }
 
         var meta = GetDeviceMeta(deviceHandle);
@@ -349,17 +355,67 @@ internal sealed class LogiTriggerSource : NativeWindow, ITriggerSource
         return TryMapCandidates(sub.Config.Map, candidates, out mappedEvent);
     }
 
-    private static bool TryMapHid(Subscription sub, byte[] report, out string raw, out string mappedEvent)
+    private bool TryMapHid(Subscription sub, nint deviceHandle, byte[] report, out string raw, out string mappedEvent)
     {
         var hex = Convert.ToHexString(report);
-        var candidates = new[]
+        var candidates = new List<string>(8)
         {
             "hid:hex:" + hex,
             "hid:len:" + report.Length + ":" + hex,
         };
 
+        AddVendorKeyCandidates(deviceHandle, report, candidates);
+
         raw = candidates[0];
         return TryMapCandidates(sub.Config.Map, candidates, out mappedEvent);
+    }
+
+    private void AddVendorKeyCandidates(nint deviceHandle, byte[] report, List<string> candidates)
+    {
+        // Logitech vendor key-event packets on MX Keys BT were observed as:
+        // 11 FF 08 00 00 <code> ...
+        // where <code> == 0 means "no key pressed" (generic release/idle packet).
+        if (report.Length < 6 ||
+            report[0] != 0x11 ||
+            report[1] != 0xFF ||
+            report[2] != 0x08 ||
+            report[3] != 0x00 ||
+            report[4] != 0x00)
+        {
+            return;
+        }
+
+        var code = report[5];
+        if (code != 0)
+        {
+            lock (_gate)
+            {
+                _lastVendorKeyCodeByDevice[deviceHandle] = code;
+            }
+
+            AddVendorKeyCodeCandidates(candidates, code, isUp: false);
+            return;
+        }
+
+        byte lastCode;
+        lock (_gate)
+        {
+            if (!_lastVendorKeyCodeByDevice.TryGetValue(deviceHandle, out lastCode))
+            {
+                return;
+            }
+
+            _lastVendorKeyCodeByDevice.Remove(deviceHandle);
+        }
+
+        AddVendorKeyCodeCandidates(candidates, lastCode, isUp: true);
+    }
+
+    private static void AddVendorKeyCodeCandidates(List<string> candidates, byte code, bool isUp)
+    {
+        var suffix = isUp ? ".up" : ".down";
+        candidates.Add($"logi:vendor-key:{code}{suffix}");
+        candidates.Add($"logi:vendor-key:0x{code:X2}{suffix}");
     }
 
     private static bool TryMapCandidates(
