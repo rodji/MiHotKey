@@ -91,34 +91,23 @@
     ],
 
     "logi": [
-      // Temporary MX Keys (B35B) diagnostics:
-      // Any matching HID report on these collections will fire "mx.lock.test"
-      // and also be logged (raw bytes) so we can replace this wildcard mapping
-      // with an exact "Lock" button pattern.
+      // MX Keys (B35B) "Lock" button over Logitech vendor HID channel (BT).
+      // Captured reports:
+      // - down: 11FF0800006F0000000000000000000000000000
+      // - up:   11FF080000000000000000000000000000000000
       {
-        "id": "mxkeys.b35b.consumer.test",
-        "kind": "Hid",
-        "vendorId": "046D",
-        "productId": "B35B",
-        "usagePage": 12,
-        "usage": 1,
-        "map": {
-          "hid:hex:*": "mx.lock.test"
-        },
-        "logRaw": true,
-        "debounceMs": 800
-      },
-      {
-        "id": "mxkeys.b35b.vendor.test",
+        "id": "mxkeys.b35b.lock",
         "kind": "Hid",
         "vendorId": "046D",
         "productId": "B35B",
         "usagePage": 65347,
         "usage": 514,
         "map": {
-          "hid:hex:*": "mx.lock.test"
+          "hid:hex:11FF0800006F0000000000000000000000000000": "mx.lock.down",
+          "hid:hex:11FF080000000000000000000000000000000000": "mx.lock.up"
         },
         "logRaw": true,
+        "repeatHandling": "firstDownOnlyUntilUp",
         "debounceMs": 800
       }
     ]
@@ -134,7 +123,7 @@
     ],
     "notepad": [
       "triangle.down",
-      "mx.lock.test"
+      "mx.lock.down"
     ],
     "console": [
       "hexagon.down"
