@@ -370,6 +370,9 @@ internal sealed class ProgramConfig
 
 internal sealed class AudioDeviceConfig
 {
+    private string[] _deviceIds = [];
+    private bool _legacyDeviceIdProvided;
+
     [JsonPropertyName("flow")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AudioFlow Flow { get; init; } = AudioFlow.Capture;
@@ -378,11 +381,34 @@ internal sealed class AudioDeviceConfig
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AudioRole Role { get; init; } = AudioRole.Communications;
 
-    [JsonPropertyName("deviceId")]
-    public string DeviceId { get; init; } = "";
-
     [JsonPropertyName("deviceIds")]
-    public string[] DeviceIds { get; init; } = [];
+    public string[] DeviceIds
+    {
+        get => _deviceIds;
+        init => _deviceIds = value ?? [];
+    }
+
+    // Backward-compatible alias for older configs. We keep a single canonical field (`deviceIds`)
+    // and normalize legacy `deviceId` into a one-element array during deserialization.
+    [JsonPropertyName("deviceId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LegacyDeviceId
+    {
+        get => null;
+        init
+        {
+            _legacyDeviceIdProvided = !string.IsNullOrWhiteSpace(value);
+            if (!_legacyDeviceIdProvided || _deviceIds.Length > 0)
+            {
+                return;
+            }
+
+            _deviceIds = [value!.Trim()];
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasLegacyDeviceId => _legacyDeviceIdProvided;
 
     [JsonPropertyName("scope")]
     [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -297,7 +297,6 @@ Actions on audio devices via Core Audio (Windows).
       "flow": "Capture",
       "role": "Communications",
       "scope": "Single",
-      "deviceId": "",
       "deviceIds": [],
       "action": "ToggleMute"
     }
@@ -310,19 +309,18 @@ Fields:
 - `flow` - stream type. Values: `Capture` - microphones (input); `Render` - speakers/headphones (output).
 - `role` - device role. Values: `Console` - default "general" device; `Multimedia` - multimedia; `Communications` - communications (often used by Teams/Zoom).
 - `scope` - device selection mode. Values: `Single` - one device (default); `AllActiveInFlow` - all active devices for the selected `flow` (for example all microphones).
-- `deviceId` - specific device ID (Windows string) for single-device mode. If empty, the default for `flow`+`role` is used.
-- `deviceIds` - explicit list of device IDs (single-device mode, but for multiple concrete devices).
+- `deviceIds` - explicit list of device IDs (single-device mode). If empty, the default for `flow`+`role` is used. One item = one fixed device; several items = group action.
 - `action` - action to perform. Values: `ToggleMute` - toggle mute; `Mute` - mute; `Unmute` - unmute.
 
 Notes:
 
-- `scope=AllActiveInFlow` cannot be combined with `deviceId` / `deviceIds`.
-- `deviceId` and `deviceIds` are mutually exclusive.
-- If `deviceId` or `deviceIds` is set, `role` is ignored.
+- `scope=AllActiveInFlow` cannot be combined with `deviceIds`.
+- If `deviceIds` is set (non-empty), `role` is ignored.
 - Mute is applied at the device level and affects all apps using that device.
 - For multi-device `ToggleMute` (`deviceIds` or `scope=AllActiveInFlow`) the action is **grouped**:
   - if at least one target device is unmuted -> mute all targets;
   - otherwise -> unmute all targets.
+- Backward compatibility: old configs with `deviceId` are still accepted on load and normalized internally to `deviceIds: ["..."]`.
 
 Examples:
 

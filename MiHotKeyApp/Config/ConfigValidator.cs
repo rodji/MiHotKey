@@ -71,17 +71,16 @@ internal static class ConfigValidator
                 throw new InvalidDataException("audioDevices entries must have non-empty id");
             }
 
-            var hasDeviceId = !string.IsNullOrWhiteSpace(audio.DeviceId);
             var hasDeviceIds = audio.DeviceIds.Any(static value => !string.IsNullOrWhiteSpace(value));
 
-            if (hasDeviceId && hasDeviceIds)
+            if (audio.HasLegacyDeviceId && hasDeviceIds)
             {
-                throw new InvalidDataException($"audioDevices['{id}'] cannot set both deviceId and deviceIds");
+                throw new InvalidDataException($"audioDevices['{id}'] cannot set both legacy deviceId and deviceIds");
             }
 
-            if (audio.Scope == AudioDeviceScope.AllActiveInFlow && (hasDeviceId || hasDeviceIds))
+            if (audio.Scope == AudioDeviceScope.AllActiveInFlow && hasDeviceIds)
             {
-                throw new InvalidDataException($"audioDevices['{id}'] scope=AllActiveInFlow cannot be combined with deviceId/deviceIds");
+                throw new InvalidDataException($"audioDevices['{id}'] scope=AllActiveInFlow cannot be combined with deviceIds");
             }
 
             foreach (var deviceId in audio.DeviceIds)

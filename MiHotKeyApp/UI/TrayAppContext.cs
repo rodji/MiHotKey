@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 
 internal sealed class TrayAppContext : ApplicationContext
 {
+    private const string AppIconFileName = "tray_keymap_icon.ico";
+
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _reload;
     private readonly ToolStripMenuItem _showLog;
@@ -24,7 +26,7 @@ internal sealed class TrayAppContext : ApplicationContext
 
         _tray = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadTrayIcon(),
             Visible = true,
             Text = "MiHotKey",
         };
@@ -124,5 +126,38 @@ internal sealed class TrayAppContext : ApplicationContext
         }
 
         base.ExitThreadCore();
+    }
+
+    private static Icon LoadTrayIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, AppIconFileName);
+        if (File.Exists(iconPath))
+        {
+            try
+            {
+                return new Icon(iconPath);
+            }
+            catch
+            {
+            }
+        }
+
+        try
+        {
+            var processPath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(processPath))
+            {
+                var extracted = Icon.ExtractAssociatedIcon(processPath);
+                if (extracted is not null)
+                {
+                    return extracted;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return System.Drawing.SystemIcons.Application;
     }
 }

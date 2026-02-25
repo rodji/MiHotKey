@@ -121,8 +121,7 @@ internal sealed class AudioDeviceManager
                 .ToArray();
         }
 
-        var logId = string.IsNullOrWhiteSpace(cfg.DeviceId) ? "<default>" : cfg.DeviceId;
-        return [new ResolvedAudioTarget(cfg.DeviceId, logId)];
+        return [new ResolvedAudioTarget("", "<default>")];
     }
 
     private ResolvedAudioTarget[] GetActiveTargetsForFlow(EDataFlow flow)

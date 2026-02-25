@@ -96,7 +96,7 @@
       // - down: 11FF0800006F0000000000000000000000000000
       // - up:   11FF080000000000000000000000000000000000
       {
-        "id": "mxkeys.b35b.lock",
+        "id": "mxkeys.b35b",
         "kind": "Hid",
         "vendorId": "046D",
         "productId": "B35B",
@@ -209,7 +209,8 @@
     "mic.toggle": {
       "flow": "Capture",
       "role": "Communications",
-      "deviceId": "",
+      "scope": "AllActiveInFlow",
+      "deviceIds": [],
       "action": "ToggleMute"
     }
   },
