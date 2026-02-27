@@ -66,7 +66,6 @@ internal sealed class AppRuntime : IDisposable
         _autostart = new AutostartManager(_loggerFactory.CreateLogger(LogCategories.Config));
 
         _foreground = new ForegroundTracker(10);
-        _foreground.Start();
 
         _selector = new TargetSelector(_foreground);
         _windowInfo = new WindowInfoProvider();
@@ -165,8 +164,10 @@ internal sealed class AppRuntime : IDisposable
 
         _autostart.Apply(cfg.App.Autostart.Enabled);
 
-        var effectiveTrackingEnabled = _foregroundTrackingOverride ?? cfg.App.ForegroundTrackingEnabled;
-        _foreground.Configure(effectiveTrackingEnabled, cfg.App.ForegroundHistorySize);
+        var depth = cfg.App.TargetSearchDepth;
+        _foreground.Configure(
+            ShouldTrackForeground(depth),
+            GetTrackerCapacity(depth));
 
         _logProvider.UpdateConfig(cfg.Logging);
         _logBuffer.Resize(cfg.App.LogBufferSize);
@@ -188,8 +189,10 @@ internal sealed class AppRuntime : IDisposable
     public void SetForegroundTrackingEnabled(bool enabled)
     {
         _foregroundTrackingOverride = enabled;
-        _foreground.Configure(enabled, _config.App.ForegroundHistorySize);
-        _logConfig.LogInformation("foregroundTracking enabled={enabled}", enabled ? 1 : 0);
+        var depth = _config.App.TargetSearchDepth;
+        var effective = ShouldTrackForeground(depth);
+        _foreground.Configure(effective, GetTrackerCapacity(depth));
+        _logConfig.LogInformation("foregroundTracking requested={requested} effective={effective} depth={depth}", enabled ? 1 : 0, effective ? 1 : 0, depth);
     }
 
     public void SetAutostartEnabled(bool enabled)
@@ -227,7 +230,7 @@ internal sealed class AppRuntime : IDisposable
 
     private void LogForegroundTracking()
     {
-        _logDiag.LogInformation("foregroundTracking enabled={enabled}", _foreground.IsEnabled ? 1 : 0);
+        _logDiag.LogInformation("foregroundTracking enabled={enabled} depth={depth}", _foreground.IsEnabled ? 1 : 0, _config.App.TargetSearchDepth);
 
         var (fg, prev) = _foreground.GetForegroundAndPrevious();
         if (fg != 0)
@@ -307,5 +310,26 @@ internal sealed class AppRuntime : IDisposable
         _foreground.Dispose();
         _session.Dispose();
         _loggerFactory.Dispose();
+    }
+
+    private bool ShouldTrackForeground(int depth)
+    {
+        if (depth <= 1)
+        {
+            return false;
+        }
+
+        return _foregroundTrackingOverride ?? true;
+    }
+
+    private static int GetTrackerCapacity(int depth)
+    {
+        if (depth <= 1)
+        {
+            return 2;
+        }
+
+        // Keep extra room for repeated foreground events of the same window.
+        return Math.Min(1000, Math.Max(8, depth * 4));
     }
 }

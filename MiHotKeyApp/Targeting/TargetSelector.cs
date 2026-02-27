@@ -1,6 +1,6 @@
 namespace MiHotKeyApp.Targeting;
 
-using MiHotKeyApp.Config;
+using MiHotKeyApp.Native;
 
 internal sealed class TargetSelector
 {
@@ -11,17 +11,40 @@ internal sealed class TargetSelector
         _tracker = tracker;
     }
 
-    public nint[] GetCandidates(TargetSelectionMode mode)
+    public nint[] GetCandidates(int depth)
     {
-        var (fg, prev) = _tracker.GetForegroundAndPrevious();
-
-        return mode switch
+        if (depth < 1)
         {
-            TargetSelectionMode.ForegroundOnly => fg != 0 ? [fg] : [],
-            TargetSelectionMode.AlwaysPrevious => prev != 0 ? [prev] : [],
-            TargetSelectionMode.ForegroundThenPrevious => prev != 0 ? [fg, prev] : fg != 0 ? [fg] : [],
-            _ => fg != 0 ? [fg] : [],
-        };
+            return [];
+        }
+
+        var list = new List<nint>(depth);
+        var seen = new HashSet<nint>();
+
+        var fg = User32.GetForegroundWindow();
+        if (fg != 0 && User32.IsWindow(fg) && seen.Add(fg))
+        {
+            list.Add(fg);
+            if (list.Count >= depth)
+            {
+                return list.ToArray();
+            }
+        }
+
+        foreach (var hwnd in _tracker.GetHistorySnapshot())
+        {
+            if (hwnd == 0 || !User32.IsWindow(hwnd) || !seen.Add(hwnd))
+            {
+                continue;
+            }
+
+            list.Add(hwnd);
+            if (list.Count >= depth)
+            {
+                break;
+            }
+        }
+
+        return list.ToArray();
     }
 }
-

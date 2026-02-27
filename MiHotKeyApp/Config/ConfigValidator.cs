@@ -17,9 +17,9 @@ internal static class ConfigValidator
             throw new InvalidDataException("app.logBufferSize must be between 10 and 10000");
         }
 
-        if (cfg.App.ForegroundHistorySize < 0 || cfg.App.ForegroundHistorySize > 1000)
+        if (cfg.App.TargetSearchDepth < 1 || cfg.App.TargetSearchDepth > 1000)
         {
-            throw new InvalidDataException("app.foregroundHistorySize must be between 0 and 1000");
+            throw new InvalidDataException("app.targetSearchDepth must be between 1 and 1000");
         }
 
         var ruleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

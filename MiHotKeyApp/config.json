@@ -1,4 +1,4 @@
-{
+﻿{
   "version": 2,
 
   "app": {
@@ -6,9 +6,7 @@
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
 
     "logBufferSize": 5000,
-    "foregroundTrackingEnabled": true,
-    "foregroundHistorySize": 10,
-    "targetSelectionMode": "ForegroundThenPrevious",
+    "targetSearchDepth": 8,
     "focusPolicy": "ActivateTargetTemporarily",
 
     "sendTimingMs": {
@@ -116,14 +114,14 @@
   "bindings": {
     "mute": [
       "circle.down",
-      "square.down"
+      "square.down",
+      "mx.lock.down"
     ],
     "mic.toggle": [
       "droplett.down"
     ],
     "notepad": [
-      "triangle.down",
-      "mx.lock.down"
+      "triangle.down"
     ],
     "console": [
       "hexagon.down"
@@ -136,7 +134,7 @@
         "id": "meet",
         "prio": 100,
         "proc": [ "chrome" ],
-        "title": [ "Meet – * - Google Chrome" ],
+        "title": [ "*Meet* - Google Chrome" ],
         "classIs": [ "Chrome_WidgetWin_1" ]
       },
       {
@@ -144,7 +142,7 @@
         "prio": 95,
         "proc": [ "msedgewebview2", "ms-teams" ],
         "classIs": [ "TeamsWebView" ],
-        "title": [ "* | Microsoft Teams" ]
+        "title": [ "Microsoft Teams", "* | Microsoft Teams" ]
       },
       {
         "id": "telegram",
@@ -235,3 +233,4 @@
     ]
   }
 }
+

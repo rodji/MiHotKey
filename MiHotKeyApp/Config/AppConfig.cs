@@ -50,15 +50,8 @@ internal sealed class AppSection
     [JsonPropertyName("logBufferSize")]
     public int LogBufferSize { get; init; } = 5000;
 
-    [JsonPropertyName("foregroundTrackingEnabled")]
-    public bool ForegroundTrackingEnabled { get; init; } = true;
-
-    [JsonPropertyName("foregroundHistorySize")]
-    public int ForegroundHistorySize { get; init; } = 10;
-
-    [JsonPropertyName("targetSelectionMode")]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public TargetSelectionMode TargetSelectionMode { get; init; } = TargetSelectionMode.ForegroundThenPrevious;
+    [JsonPropertyName("targetSearchDepth")]
+    public int TargetSearchDepth { get; init; } = 2;
 
     [JsonPropertyName("focusPolicy")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -96,13 +89,6 @@ internal sealed class SendTimingMsSection
 
     [JsonPropertyName("keyUpToModUp")]
     public int KeyUpToModUp { get; init; } = 2;
-}
-
-internal enum TargetSelectionMode
-{
-    ForegroundThenPrevious,
-    ForegroundOnly,
-    AlwaysPrevious,
 }
 
 internal enum FocusPolicy

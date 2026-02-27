@@ -30,7 +30,7 @@ internal sealed class Router
     private Dictionary<string, ProgramConfig> _programs = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, AudioDeviceConfig> _audioDevices = new(StringComparer.OrdinalIgnoreCase);
 
-    private TargetSelectionMode _mode = TargetSelectionMode.ForegroundThenPrevious;
+    private int _targetSearchDepth = 2;
     private FocusPolicy _focusPolicy = FocusPolicy.ActivateTargetTemporarily;
     private Timing _timing = new(5, 2, 2);
 
@@ -38,6 +38,12 @@ internal sealed class Router
     {
         public static SendResult Logged(bool ok) => new(ok, LogResult: true);
         public static SendResult Unlogged(bool ok) => new(ok, LogResult: false);
+    }
+
+    private enum RoutingPass
+    {
+        GlobalOnly,
+        NonGlobalOnly,
     }
 
     public Router(
@@ -67,7 +73,7 @@ internal sealed class Router
 
     public void ApplyConfig(AppConfig cfg)
     {
-        _mode = cfg.App.TargetSelectionMode;
+        _targetSearchDepth = Math.Max(1, cfg.App.TargetSearchDepth);
         _focusPolicy = cfg.App.FocusPolicy;
         _timing = new Timing(cfg.App.SendTimingMs.ModDownToKeyDown, cfg.App.SendTimingMs.KeyDownToKeyUp, cfg.App.SendTimingMs.KeyUpToModUp);
 
@@ -188,28 +194,48 @@ internal sealed class Router
 
     private void HandleRoutedTrigger(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
     {
-        var candidates = GetCandidatesForRoutes(routes);
-        if (candidates.Length == 0)
+        var hasGlobalRoutes = routes.Values.Any(IsGlobalAction);
+        if (hasGlobalRoutes && TryHandlePass(triggerId, routes, RoutingPass.GlobalOnly, includeAllWindows: true))
         {
-            _logMatch.LogInformation("none reason=noCandidates");
             return;
         }
 
-        foreach (var hwnd in candidates)
+        if (TryHandlePass(triggerId, routes, RoutingPass.NonGlobalOnly, includeAllWindows: false))
         {
-            if (TryHandleCandidate(triggerId, routes, hwnd))
-            {
-                return;
-            }
+            return;
         }
 
         _logMatch.LogInformation("none");
     }
 
-    private nint[] GetCandidatesForRoutes(Dictionary<string, (RouteActionType Type, string Id)> routes)
+    private bool TryHandlePass(
+        string triggerId,
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        RoutingPass pass,
+        bool includeAllWindows)
     {
-        var candidates = _selector.GetCandidates(_mode);
-        if (!RequiresGlobalWindowSearch(routes))
+        var candidates = GetCandidates(includeAllWindows);
+        if (candidates.Length == 0)
+        {
+            _logMatch.LogInformation("none reason=noCandidates");
+            return false;
+        }
+
+        foreach (var hwnd in candidates)
+        {
+            if (TryHandleCandidate(triggerId, routes, hwnd, pass))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private nint[] GetCandidates(bool includeAllWindows)
+    {
+        var candidates = _selector.GetCandidates(_targetSearchDepth);
+        if (!includeAllWindows)
         {
             return candidates;
         }
@@ -230,25 +256,22 @@ internal sealed class Router
         return list.ToArray();
     }
 
-    private bool RequiresGlobalWindowSearch(Dictionary<string, (RouteActionType Type, string Id)> routes)
+    private bool IsGlobalAction((RouteActionType Type, string Id) action)
     {
-        foreach (var action in routes.Values)
+        if (action.Type != RouteActionType.Shortcut)
         {
-            if (action.Type != RouteActionType.Shortcut)
-            {
-                continue;
-            }
-
-            if (_shortcuts.TryGetValue(action.Id, out var shortcut) && shortcut.Mode == SendMode.Global)
-            {
-                return true;
-            }
+            return false;
         }
 
-        return false;
+        return _shortcuts.TryGetValue(action.Id, out var shortcut)
+            && shortcut.Mode == SendMode.Global;
     }
 
-    private bool TryHandleCandidate(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes, nint hwnd)
+    private bool TryHandleCandidate(
+        string triggerId,
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        nint hwnd,
+        RoutingPass pass)
     {
         var wi = _info.GetInfo(hwnd);
         _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
@@ -265,7 +288,34 @@ internal sealed class Router
             return true;
         }
 
+        if (!IsActionInPass(action, pass))
+        {
+            return false;
+        }
+
+        _logMatch.LogInformation(
+            "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio}",
+            triggerId,
+            (nuint)wi.Hwnd,
+            wi.Pid,
+            wi.ProcessName,
+            wi.ClassName,
+            wi.Title,
+            rule.Id,
+            rule.Prio);
+
         return ExecuteAction(triggerId, rule, action, hwnd);
+    }
+
+    private bool IsActionInPass((RouteActionType Type, string Id) action, RoutingPass pass)
+    {
+        var isGlobal = IsGlobalAction(action);
+        return pass switch
+        {
+            RoutingPass.GlobalOnly => isGlobal,
+            RoutingPass.NonGlobalOnly => !isGlobal,
+            _ => true,
+        };
     }
 
     private bool ExecuteAction(string triggerId, TargetRuleConfig rule, (RouteActionType Type, string Id) action, nint hwnd)

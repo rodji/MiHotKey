@@ -14,6 +14,8 @@ The app reads `config.json` from the startup folder (this is `AppContext.BaseDir
 - In `routesByTrigger`, support for "no rule" (empty/missing `rule`) - unconditional action.
 - Added `audioDevices` and `routesByTrigger.actionType = "Audio"` to control mic/speaker mute.
 - Added diagnostics and the tray menu item **Run diagnostics** (logs windows/audio/foreground-tracker).
+- Replaced `targetSelectionMode` with numeric `app.targetSearchDepth`.
+- Routing now uses two passes with global shortcuts first.
 
 ## How the config file is chosen
 
@@ -46,9 +48,7 @@ This lets you keep the "main" config, for example, in `%AppData%`, leaving a sma
     "configPath": ".\\config.json",
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
     "logBufferSize": 100,
-    "foregroundTrackingEnabled": true,
-    "foregroundHistorySize": 10,
-    "targetSelectionMode": "ForegroundThenPrevious",
+    "targetSearchDepth": 8,
     "focusPolicy": "ActivateTargetTemporarily",
     "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
     "autostart": { "enabled": false },
@@ -60,9 +60,10 @@ This lets you keep the "main" config, for example, in `%AppData%`, leaving a sma
 - `configPath` - path to the "main" config (absolute or relative to the startup folder).
 - `altConfigPathHint` - hint in logs (does not affect behavior).
 - `logBufferSize` - size of the log ring buffer (10..10000).
-- `foregroundTrackingEnabled` - enable tracking of the current/previous window.
-- `foregroundHistorySize` - how many windows to keep in history (0..1000).
-- `targetSelectionMode` - target selection strategy. Values: `ForegroundThenPrevious` - first the current foreground window, then the previous one; `ForegroundOnly` - only the foreground; `AlwaysPrevious` - only the previous.
+- `targetSearchDepth` - how many recent windows are checked for routing (1..1000), in recency order: current foreground first, then previous windows from history.
+  - `1` - only current foreground window (foreground tracker is not used).
+  - `>1` - foreground tracker is enabled automatically; larger values allow deeper "previous window" search.
+  - Tray toggle **Foreground tracking** can temporarily disable history tracking (effective only when depth is greater than `1`).
 - `focusPolicy` - focus behavior when sending. Values: `ActivateTargetTemporarily` - temporarily activate the target window to send (then restore focus); `NoFocusChange` - do not change focus (only if the target window is already foreground).
 - `sendTimingMs` - delays (ms) between modifier down/up and the main key.
 - `autostart.enabled` - enable autostart on Windows user login. Implementation: write `MiHotKey` to `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` with the current `.exe` command line. Can be toggled from the tray menu **Autostart**; the app updates `config.json` and reloads the config.
@@ -206,7 +207,7 @@ Fields:
 
 ## `targets.rules`
 
-Rules for finding the target window. When a trigger fires, the app iterates candidates (see `targetSelectionMode`) and picks the first window that matches the rule.
+Rules for finding the target window. When a trigger fires, the app iterates candidates (see `targetSearchDepth`) and picks the first window that matches the rule.
 
 ```jsonc
 {
@@ -217,7 +218,7 @@ Rules for finding the target window. When a trigger fires, the app iterates cand
         "prio": 95,
         "proc": [ "msedgewebview2", "ms-teams" ],
         "classIs": [ "TeamsWebView" ],
-        "title": [ "* | Microsoft Teams" ]
+        "title": [ "Microsoft Teams", "* | Microsoft Teams" ]
       }
     ]
   }
@@ -369,4 +370,7 @@ Main routing table: for each `triggerId`, a list of rules is defined, and for ea
 Important:
 
 - `triggerId` must exist in `inputs.hotkeys[].id` **or** in `bindings` (as a key). For example, for `openNotepad` above you need to add `inputs.hotkeys` with `id: "openNotepad"` or add a binding via `bindings`.
-- The first matching window executes the action and handling stops.
+- Routing is executed in two passes:
+  1. Global shortcuts (`send: "global"`) are matched first. Candidate order: recent windows (`targetSearchDepth`) then all top-level windows.
+  2. Non-global actions are matched second, using only recent windows (`targetSearchDepth`).
+- In each pass, the first matching window executes the action and handling stops.

@@ -14,6 +14,8 @@
 - В `routesByTrigger` поддержано “без правила” (пустой/отсутствующий `rule`) — безусловное действие.
 - Добавлены `audioDevices` и `routesByTrigger.actionType = "Audio"` для управления mute микрофона/динамиков.
 - Добавлены диагностика и пункт tray-меню **Run diagnostics** (логирует окна/аудио/foreground-tracker).
+- `targetSelectionMode` заменен на числовой `app.targetSearchDepth`.
+- Роутинг теперь работает в два прохода, сначала для глобальных shortcut.
 
 ## Как выбирается файл конфига
 
@@ -46,9 +48,7 @@
     "configPath": ".\\config.json",
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
     "logBufferSize": 100,
-    "foregroundTrackingEnabled": true,
-    "foregroundHistorySize": 10,
-    "targetSelectionMode": "ForegroundThenPrevious",
+    "targetSearchDepth": 8,
     "focusPolicy": "ActivateTargetTemporarily",
     "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
     "autostart": { "enabled": false },
@@ -60,12 +60,10 @@
 - `configPath` — путь к “основному” конфигу (абсолютный или относительный от папки запуска).
 - `altConfigPathHint` — подсказка в логах (на поведение не влияет).
 - `logBufferSize` — размер кольцевого буфера логов (10..10000).
-- `foregroundTrackingEnabled` — включить трекинг активного/предыдущего окна.
-- `foregroundHistorySize` — сколько окон хранить в истории (0..1000).
-- `targetSelectionMode`:
-  - `ForegroundThenPrevious` — сначала текущее foreground окно, затем предыдущее.
-  - `ForegroundOnly` — только foreground.
-  - `AlwaysPrevious` — только предыдущее.
+- `targetSearchDepth` — глубина поиска целевого окна по “недавним” окнам (1..1000): сначала текущее foreground, затем предыдущие окна из истории.
+  - `1` — только текущее foreground окно (трекинг истории не используется).
+  - `>1` — трекинг истории включается автоматически; чем больше число, тем глубже поиск по предыдущим окнам.
+  - Переключатель tray-меню **Foreground tracking** может временно отключить трекинг истории (имеет смысл только при глубине больше `1`).
 - `focusPolicy`:
   - `ActivateTargetTemporarily` — временно активировать целевое окно для отправки (потом вернуть фокус).
   - `NoFocusChange` — не менять фокус (только если целевое окно уже foreground).
@@ -170,7 +168,7 @@ WMI-источник генерирует “события” (строки), �
 
 ## `targets.rules`
 
-Правила поиска целевого окна. При срабатывании триггера приложение перебирает кандидатов (см. `targetSelectionMode`) и выбирает первое окно, которое матчится под правило.
+Правила поиска целевого окна. При срабатывании триггера приложение перебирает кандидатов (см. `targetSearchDepth`) и выбирает первое окно, которое матчится под правило.
 
 ```jsonc
 {
@@ -181,7 +179,7 @@ WMI-источник генерирует “события” (строки), �
         "prio": 95,
         "proc": [ "msedgewebview2", "ms-teams" ],
         "classIs": [ "TeamsWebView" ],
-        "title": [ "* | Microsoft Teams" ]
+        "title": [ "Microsoft Teams", "* | Microsoft Teams" ]
       }
     ]
   }
@@ -328,4 +326,7 @@ WMI-источник генерирует “события” (строки), �
 
 - `triggerId` должен существовать в `inputs.hotkeys[].id` **или** в `bindings` (как ключ).
   - например, для `openNotepad` выше нужно добавить `inputs.hotkeys` с `id: "openNotepad"` или сделать привязку через `bindings`.
-- Для первого найденного подходящего окна выполняется действие и обработка завершается.
+- Роутинг выполняется в два прохода:
+  1. Сначала ищутся только `Shortcut` с `send: "global"`: сначала по недавним окнам (`targetSearchDepth`), потом по всем top-level окнам.
+  2. Затем ищутся все неглобальные действия: только по недавним окнам (`targetSearchDepth`).
+- В каждом проходе для первого найденного подходящего окна выполняется действие и обработка завершается.
