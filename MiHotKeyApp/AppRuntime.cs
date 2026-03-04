@@ -8,7 +8,6 @@ using MiHotKeyApp.Input.Hotkey;
 using MiHotKeyApp.Input.Logi;
 using MiHotKeyApp.Input.Wmi;
 using MiHotKeyApp.Logging;
-using MiHotKeyApp.Native;
 using MiHotKeyApp.Routing;
 using MiHotKeyApp.Sending;
 using MiHotKeyApp.Targeting;
@@ -27,9 +26,9 @@ internal sealed class AppRuntime : IDisposable
 
     private readonly SessionState _session;
     private readonly AutostartManager _autostart;
-    private readonly System.Threading.Timer _foregroundTrackingTimer;
 
     private readonly ForegroundTracker _foreground;
+    private readonly ForegroundTrackingController _foregroundTracking;
     private readonly TargetSelector _selector;
     private readonly WindowInfoProvider _windowInfo;
     private readonly WindowRuleMatcher _matcher;
@@ -46,13 +45,6 @@ internal sealed class AppRuntime : IDisposable
 
     private AppConfig _config;
     private string _resolvedConfigPath;
-    private bool? _foregroundTrackingOverride;
-    private readonly object _foregroundTrackingGate = new();
-    private bool _foregroundTrackingAppliedEnabled;
-    private int _foregroundTrackingAppliedCapacity = -1;
-
-    private const int ForegroundTrackingRefreshMs = 2000;
-    private static readonly TimeSpan SmartForegroundIdleThreshold = TimeSpan.FromMinutes(1);
 
     public AppRuntime(string baseDir, SynchronizationContext ui)
     {
@@ -74,6 +66,7 @@ internal sealed class AppRuntime : IDisposable
         _autostart = new AutostartManager(_loggerFactory.CreateLogger(LogCategories.Config));
 
         _foreground = new ForegroundTracker(10);
+        _foregroundTracking = new ForegroundTrackingController(_foreground, _session, _loggerFactory.CreateLogger(LogCategories.Config));
 
         _selector = new TargetSelector(_foreground);
         _windowInfo = new WindowInfoProvider();
@@ -101,13 +94,12 @@ internal sealed class AppRuntime : IDisposable
 
         _config = new AppConfig();
         _resolvedConfigPath = Path.Combine(_baseDir, "config.json");
-        _foregroundTrackingTimer = new System.Threading.Timer(_ => RefreshForegroundTracking("timer"), null, Timeout.Infinite, Timeout.Infinite);
     }
 
     public RingLogBuffer LogBuffer => _logBuffer;
     public ILoggerFactory LoggerFactory => _loggerFactory;
     public TraySection Tray => _config.Tray;
-    public bool ForegroundTrackingEnabled => _foreground.IsEnabled;
+    public bool ForegroundTrackingEnabled => _foregroundTracking.IsEnabled;
     public bool AutostartEnabled => _config.App.Autostart.Enabled;
 
     public (string Id, string Title)[] UiPrograms =>
@@ -126,7 +118,7 @@ internal sealed class AppRuntime : IDisposable
         }
 
         ReloadConfig(initial: true);
-        _foregroundTrackingTimer.Change(ForegroundTrackingRefreshMs, ForegroundTrackingRefreshMs);
+        _foregroundTracking.Start();
         _dispatcher.Start();
     }
 
@@ -143,7 +135,6 @@ internal sealed class AppRuntime : IDisposable
                 loaded = _configStore.LoadFromPath(resolved);
             }
 
-            _foregroundTrackingOverride = null;
             ApplyConfig(loaded, resolved);
             if (loaded.Logging.ShowConfigPathsInLog)
             {
@@ -173,7 +164,7 @@ internal sealed class AppRuntime : IDisposable
         _resolvedConfigPath = resolvedPath;
 
         _autostart.Apply(cfg.App.Autostart.Enabled);
-        RefreshForegroundTracking("config", force: true);
+        _foregroundTracking.ApplyConfig(cfg.App);
 
         _logProvider.UpdateConfig(cfg.Logging);
         _logBuffer.Resize(cfg.App.LogBufferSize);
@@ -194,8 +185,7 @@ internal sealed class AppRuntime : IDisposable
 
     public void SetForegroundTrackingEnabled(bool enabled)
     {
-        _foregroundTrackingOverride = enabled;
-        RefreshForegroundTracking("ui", force: true);
+        _foregroundTracking.SetOverride(enabled);
     }
 
     public void SetAutostartEnabled(bool enabled)
@@ -233,16 +223,15 @@ internal sealed class AppRuntime : IDisposable
 
     private void LogForegroundTracking()
     {
-        var screensaver = IsScreenSaverRunning();
-        var idle = GetUserIdleTime();
+        var status = _foregroundTracking.GetStatus();
         _logDiag.LogInformation(
             "foregroundTracking enabled={enabled} depth={depth} mode={mode} locked={locked} screensaver={screensaver} idleSec={idleSec}",
-            _foreground.IsEnabled ? 1 : 0,
-            _config.App.TargetSearchDepth,
-            _config.App.ToggleForegroundTracking,
-            _session.IsLocked ? 1 : 0,
-            screensaver ? 1 : 0,
-            (int)idle.TotalSeconds);
+            status.IsEnabled ? 1 : 0,
+            status.Depth,
+            status.Mode,
+            status.IsLocked ? 1 : 0,
+            status.IsScreenSaverRunning ? 1 : 0,
+            (int)status.Idle.TotalSeconds);
 
         var (fg, prev) = _foreground.GetForegroundAndPrevious();
         if (fg != 0)
@@ -317,119 +306,11 @@ internal sealed class AppRuntime : IDisposable
 
     public void Dispose()
     {
-        _foregroundTrackingTimer.Dispose();
+        _foregroundTracking.Dispose();
         _dispatcher.TriggerFired -= OnTrigger;
         _dispatcher.Dispose();
         _foreground.Dispose();
         _session.Dispose();
         _loggerFactory.Dispose();
-    }
-
-    private bool ShouldTrackForeground(int depth)
-    {
-        if (depth <= 1)
-        {
-            return false;
-        }
-
-        if (_foregroundTrackingOverride.HasValue)
-        {
-            return _foregroundTrackingOverride.Value;
-        }
-
-        return _config.App.ToggleForegroundTracking switch
-        {
-            ForegroundTrackingMode.Off => false,
-            ForegroundTrackingMode.AlwaysOn => true,
-            ForegroundTrackingMode.Smart => !ShouldSuspendTrackingInSmartMode(),
-            _ => true,
-        };
-    }
-
-    private static int GetTrackerCapacity(int depth)
-    {
-        if (depth <= 1)
-        {
-            return 2;
-        }
-
-        // Keep extra room for repeated foreground events of the same window.
-        return Math.Min(1000, Math.Max(8, depth * 4));
-    }
-
-    private void RefreshForegroundTracking(string source, bool force = false)
-    {
-        try
-        {
-            var depth = _config.App.TargetSearchDepth;
-            var enabled = ShouldTrackForeground(depth);
-            var capacity = GetTrackerCapacity(depth);
-
-            lock (_foregroundTrackingGate)
-            {
-                if (!force
-                    && _foregroundTrackingAppliedEnabled == enabled
-                    && _foregroundTrackingAppliedCapacity == capacity)
-                {
-                    return;
-                }
-
-                _foreground.Configure(enabled, capacity);
-                _foregroundTrackingAppliedEnabled = enabled;
-                _foregroundTrackingAppliedCapacity = capacity;
-            }
-
-            _logConfig.LogInformation(
-                "foregroundTracking source={source} enabled={enabled} depth={depth} mode={mode} override={override} locked={locked} screensaver={screensaver} idleSec={idleSec}",
-                source,
-                enabled ? 1 : 0,
-                depth,
-                _config.App.ToggleForegroundTracking,
-                _foregroundTrackingOverride.HasValue ? (_foregroundTrackingOverride.Value ? 1 : 0) : -1,
-                _session.IsLocked ? 1 : 0,
-                IsScreenSaverRunning() ? 1 : 0,
-                (int)GetUserIdleTime().TotalSeconds);
-        }
-        catch (Exception ex)
-        {
-            _logConfig.LogError(ex, "foregroundTracking refresh failed source={source}", source);
-        }
-    }
-
-    private bool ShouldSuspendTrackingInSmartMode()
-    {
-        if (_session.IsLocked)
-        {
-            return true;
-        }
-
-        if (IsScreenSaverRunning())
-        {
-            return true;
-        }
-
-        return GetUserIdleTime() >= SmartForegroundIdleThreshold;
-    }
-
-    private static bool IsScreenSaverRunning()
-    {
-        return User32.SystemParametersInfo(User32.SPI_GETSCREENSAVERRUNNING, 0, out var running, 0) && running;
-    }
-
-    private static TimeSpan GetUserIdleTime()
-    {
-        var info = new User32.LASTINPUTINFO
-        {
-            cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<User32.LASTINPUTINFO>(),
-        };
-
-        if (!User32.GetLastInputInfo(ref info))
-        {
-            return TimeSpan.Zero;
-        }
-
-        var now = unchecked((uint)Environment.TickCount);
-        var idleMs = unchecked(now - info.dwTime);
-        return TimeSpan.FromMilliseconds(idleMs);
     }
 }
