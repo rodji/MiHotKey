@@ -19,6 +19,7 @@ internal static class User32
     public const uint WM_KEYUP = 0x0101;
 
     public const uint MAPVK_VK_TO_VSC = 0;
+    public const uint SPI_GETSCREENSAVERRUNNING = 0x0072;
 
     public delegate void WinEventDelegate(
         nint hWinEventHook,
@@ -76,6 +77,13 @@ internal static class User32
         public uint uMsg;
         public ushort wParamL;
         public ushort wParamH;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
     }
 
     [DllImport("user32.dll")]
@@ -157,4 +165,10 @@ internal static class User32
 
     [DllImport("user32.dll")]
     public static extern bool UnhookWinEvent(nint hWinEventHook);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, out bool pvParam, uint fWinIni);
 }

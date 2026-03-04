@@ -53,6 +53,10 @@ internal sealed class AppSection
     [JsonPropertyName("targetSearchDepth")]
     public int TargetSearchDepth { get; init; } = 2;
 
+    [JsonPropertyName("toggleForegroundTracking")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ForegroundTrackingMode ToggleForegroundTracking { get; init; } = ForegroundTrackingMode.AlwaysOn;
+
     [JsonPropertyName("focusPolicy")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public FocusPolicy FocusPolicy { get; init; } = FocusPolicy.ActivateTargetTemporarily;
@@ -95,6 +99,13 @@ internal enum FocusPolicy
 {
     ActivateTargetTemporarily,
     NoFocusChange,
+}
+
+internal enum ForegroundTrackingMode
+{
+    Off,
+    Smart,
+    AlwaysOn,
 }
 
 internal sealed class TraySection

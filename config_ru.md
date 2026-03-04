@@ -16,6 +16,7 @@
 - Добавлены диагностика и пункт tray-меню **Run diagnostics** (логирует окна/аудио/foreground-tracker).
 - `targetSelectionMode` заменен на числовой `app.targetSearchDepth`.
 - Роутинг теперь работает в два прохода, сначала для глобальных shortcut.
+- Добавлен `app.toggleForegroundTracking = Off|Smart|AlwaysOn`.
 
 ## Как выбирается файл конфига
 
@@ -49,6 +50,7 @@
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
     "logBufferSize": 100,
     "targetSearchDepth": 8,
+    "toggleForegroundTracking": "Smart",
     "focusPolicy": "ActivateTargetTemporarily",
     "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
     "autostart": { "enabled": false },
@@ -64,6 +66,10 @@
   - `1` — только текущее foreground окно (трекинг истории не используется).
   - `>1` — трекинг истории включается автоматически; чем больше число, тем глубже поиск по предыдущим окнам.
   - Переключатель tray-меню **Foreground tracking** может временно отключить трекинг истории (имеет смысл только при глубине больше `1`).
+- `toggleForegroundTracking` — политика foreground-tracking при глубине больше `1`:
+  - `Off` — всегда выключен.
+  - `AlwaysOn` — всегда включен.
+  - `Smart` — временно выключается при неактивности пользователя (сессия заблокирована, работает screensaver или достигнут таймаут idle).
 - `focusPolicy`:
   - `ActivateTargetTemporarily` — временно активировать целевое окно для отправки (потом вернуть фокус).
   - `NoFocusChange` — не менять фокус (только если целевое окно уже foreground).
@@ -84,6 +90,7 @@
 ```
 
 - `runDiagnostics` — показать пункт **Run diagnostics** (логирует top-level окна, аудиоустройства и состояние foreground-tracker).
+- `toggleForegroundTracking` в секции `tray` управляет только видимостью пункта меню. Политика трекинга задается в `app.toggleForegroundTracking`.
 
 ## `logging`
 

@@ -16,6 +16,7 @@ The app reads `config.json` from the startup folder (this is `AppContext.BaseDir
 - Added diagnostics and the tray menu item **Run diagnostics** (logs windows/audio/foreground-tracker).
 - Replaced `targetSelectionMode` with numeric `app.targetSearchDepth`.
 - Routing now uses two passes with global shortcuts first.
+- Added `app.toggleForegroundTracking = Off|Smart|AlwaysOn`.
 
 ## How the config file is chosen
 
@@ -49,6 +50,7 @@ This lets you keep the "main" config, for example, in `%AppData%`, leaving a sma
     "altConfigPathHint": "%AppData%\\MiHotKey\\config.json",
     "logBufferSize": 100,
     "targetSearchDepth": 8,
+    "toggleForegroundTracking": "Smart",
     "focusPolicy": "ActivateTargetTemporarily",
     "sendTimingMs": { "modDownToKeyDown": 5, "keyDownToKeyUp": 2, "keyUpToModUp": 2 },
     "autostart": { "enabled": false },
@@ -64,6 +66,10 @@ This lets you keep the "main" config, for example, in `%AppData%`, leaving a sma
   - `1` - only current foreground window (foreground tracker is not used).
   - `>1` - foreground tracker is enabled automatically; larger values allow deeper "previous window" search.
   - Tray toggle **Foreground tracking** can temporarily disable history tracking (effective only when depth is greater than `1`).
+- `toggleForegroundTracking` - runtime policy for foreground tracking when depth is greater than `1`:
+  - `Off` - always keep tracking disabled.
+  - `AlwaysOn` - always keep tracking enabled.
+  - `Smart` - temporarily disable tracking when user is inactive (session locked, screensaver running, or idle timeout reached).
 - `focusPolicy` - focus behavior when sending. Values: `ActivateTargetTemporarily` - temporarily activate the target window to send (then restore focus); `NoFocusChange` - do not change focus (only if the target window is already foreground).
 - `sendTimingMs` - delays (ms) between modifier down/up and the main key.
 - `autostart.enabled` - enable autostart on Windows user login. Implementation: write `MiHotKey` to `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` with the current `.exe` command line. Can be toggled from the tray menu **Autostart**; the app updates `config.json` and reloads the config.
@@ -78,6 +84,7 @@ Controls visibility of tray menu items.
 ```
 
 - `runDiagnostics` - show the **Run diagnostics** item (logs top-level windows, audio devices, and foreground-tracker state).
+- `toggleForegroundTracking` here controls only tray menu visibility. Tracking policy is configured by `app.toggleForegroundTracking`.
 
 ## `logging`
 
