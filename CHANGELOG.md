@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-04 Logitech lock debounce tuning
+
+### Intention/Task
+- Fix missed second trigger on quick consecutive presses of Logitech lock button.
+- Keep protection against hold/repeat noise without blocking valid fast re-presses.
+
+### Changed
+- Reduced `inputs.logi[*].debounceMs` for `mx.lock` from `800` to `40` in default config.
+- Documented the conclusion from runtime logs: `firstDownOnlyUntilUp` already blocks hold-based repeats, while high debounce was suppressing valid rapid second `*.down` events.
+
 ## 2026-03-04 Foreground tracking policy and SRP refactor
 
 ### Intention/Task

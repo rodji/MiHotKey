@@ -107,7 +107,7 @@
         },
         "logRaw": true,
         "repeatHandling": "firstDownOnlyUntilUp",
-        "debounceMs": 800
+        "debounceMs": 40
       }
     ]
   },
