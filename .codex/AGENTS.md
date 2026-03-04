@@ -6,7 +6,7 @@
 
 ## Documentation and changelog
 
-- Keep `CHANGELOG.md` in the repository root up to date for every meaningful change.
+- Keep `CHANGELOG.md` in the repository root up to date for every meaningful change (ENG)
 - Changelog format:
   - Header: `# Changelog`
   - Entry header: `## YYYY-MM-DD {Short description}`
@@ -14,7 +14,7 @@
     - `Intention/Task` (why the change was made)
     - `Changed` (what exactly was changed)
 
-- Keep `CONFIG.md` up to date when:
+- Keep `CONFIG.md` (ENG) up to date when:
   - config schema changes,
   - config defaults change,
   - config behavior/semantics change.
