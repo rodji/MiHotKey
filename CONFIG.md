@@ -15,7 +15,7 @@ The app reads `config.json` from the startup folder (this is `AppContext.BaseDir
 - Added `audioDevices` and `routesByTrigger.actionType = "Audio"` to control mic/speaker mute.
 - Added diagnostics and the tray menu item **Run diagnostics** (logs windows/audio/foreground-tracker).
 - Replaced `targetSelectionMode` with numeric `app.targetSearchDepth`.
-- Routing now uses two passes with global shortcuts first.
+- Routing now prefers recent windows first, with a global-only top-level fallback.
 - Added `app.toggleForegroundTracking = Off|Smart|AlwaysOn`.
 
 ## How the config file is chosen
@@ -377,7 +377,8 @@ Main routing table: for each `triggerId`, a list of rules is defined, and for ea
 Important:
 
 - `triggerId` must exist in `inputs.hotkeys[].id` **or** in `bindings` (as a key). For example, for `openNotepad` above you need to add `inputs.hotkeys` with `id: "openNotepad"` or add a binding via `bindings`.
-- Routing is executed in two passes:
-  1. Global shortcuts (`send: "global"`) are matched first. Candidate order: recent windows (`targetSearchDepth`) then all top-level windows.
-  2. Non-global actions are matched second, using only recent windows (`targetSearchDepth`).
-- In each pass, the first matching window executes the action and handling stops.
+- Routing is executed in two stages:
+  1. History-first stage: recent windows are checked in recency order (`targetSearchDepth`), and for each window rules are evaluated by descending `prio`. Both global and non-global actions are allowed here.
+  2. Global fallback stage: if history produced no action, all top-level windows are scanned, but only for routes whose shortcut uses `send: "global"`. Rule priority is respected before window enumeration.
+- If a window matches a target rule that has no route for the current trigger, routing continues to the next matching rule/window.
+- The first action that executes stops handling.

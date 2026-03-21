@@ -7,6 +7,7 @@ using MiHotKeyApp.Config;
 internal sealed class WindowRuleMatcher
 {
     private CompiledRule[] _rules = [];
+    private Dictionary<string, CompiledRule> _rulesById = new(StringComparer.OrdinalIgnoreCase);
 
     public void SetRules(IEnumerable<TargetRuleConfig> rules)
     {
@@ -14,56 +15,93 @@ internal sealed class WindowRuleMatcher
             .OrderByDescending(r => r.Prio)
             .Select(Compile)
             .ToArray();
+
+        _rulesById = _rules.ToDictionary(rule => rule.Raw.Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public TargetRuleConfig[] GetRulesInPriorityOrder()
+    {
+        return _rules
+            .Select(static rule => rule.Raw)
+            .ToArray();
+    }
+
+    public TargetRuleConfig[] GetMatches(WindowInfo info)
+    {
+        if (info.Hwnd == 0)
+        {
+            return [];
+        }
+
+        return _rules
+            .Where(rule => IsMatch(rule, info))
+            .Select(static rule => rule.Raw)
+            .ToArray();
+    }
+
+    public bool IsMatch(WindowInfo info, TargetRuleConfig rule)
+    {
+        if (info.Hwnd == 0)
+        {
+            return false;
+        }
+
+        if (!_rulesById.TryGetValue(rule.Id, out var compiled))
+        {
+            return false;
+        }
+
+        return IsMatch(compiled, info);
     }
 
     public TargetRuleConfig? Match(WindowInfo info)
     {
+        foreach (var rule in _rules)
+        {
+            if (IsMatch(rule, info))
+            {
+                return rule.Raw;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsMatch(CompiledRule rule, WindowInfo info)
+    {
         if (info.Hwnd == 0)
         {
-            return null;
+            return false;
         }
 
         var proc = NormalizeProc(info.ProcessName);
         var title = info.Title ?? "";
         var cls = info.ClassName ?? "";
 
-        foreach (var rule in _rules)
+        if (rule.Procs.Count > 0 && !rule.Procs.Contains(proc))
         {
-            if (rule.Procs.Count > 0 && !rule.Procs.Contains(proc))
-            {
-                continue;
-            }
-
-            if (rule.Classes.Count > 0)
-            {
-                if (!rule.Classes.Contains(cls))
-                {
-                    continue;
-                }
-            }
-
-            if (rule.TitlePatterns.Length > 0)
-            {
-                var ok = false;
-                foreach (var re in rule.TitlePatterns)
-                {
-                    if (re.IsMatch(title))
-                    {
-                        ok = true;
-                        break;
-                    }
-                }
-
-                if (!ok)
-                {
-                    continue;
-                }
-            }
-
-            return rule.Raw;
+            return false;
         }
 
-        return null;
+        if (rule.Classes.Count > 0 && !rule.Classes.Contains(cls))
+        {
+            return false;
+        }
+
+        if (rule.TitlePatterns.Length == 0)
+        {
+            return true;
+        }
+
+        foreach (var re in rule.TitlePatterns)
+        {
+            if (re.IsMatch(title))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static CompiledRule Compile(TargetRuleConfig rule)

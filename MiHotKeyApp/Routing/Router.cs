@@ -40,12 +40,6 @@ internal sealed class Router
         public static SendResult Unlogged(bool ok) => new(ok, LogResult: false);
     }
 
-    private enum RoutingPass
-    {
-        GlobalOnly,
-        NonGlobalOnly,
-    }
-
     public Router(
         ILoggerFactory loggerFactory,
         TargetSelector selector,
@@ -194,13 +188,12 @@ internal sealed class Router
 
     private void HandleRoutedTrigger(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
     {
-        var hasGlobalRoutes = routes.Values.Any(IsGlobalAction);
-        if (hasGlobalRoutes && TryHandlePass(triggerId, routes, RoutingPass.GlobalOnly, includeAllWindows: true))
+        if (TryHandleHistoryPass(triggerId, routes))
         {
             return;
         }
 
-        if (TryHandlePass(triggerId, routes, RoutingPass.NonGlobalOnly, includeAllWindows: false))
+        if (TryHandleGlobalFallback(triggerId, routes))
         {
             return;
         }
@@ -208,52 +201,100 @@ internal sealed class Router
         _logMatch.LogInformation("none");
     }
 
-    private bool TryHandlePass(
+    private bool TryHandleHistoryPass(
         string triggerId,
-        Dictionary<string, (RouteActionType Type, string Id)> routes,
-        RoutingPass pass,
-        bool includeAllWindows)
+        Dictionary<string, (RouteActionType Type, string Id)> routes)
     {
-        var candidates = GetCandidates(includeAllWindows);
+        var candidates = _selector.GetCandidates(_targetSearchDepth);
         if (candidates.Length == 0)
         {
-            _logMatch.LogInformation("none reason=noCandidates");
             return false;
         }
 
         foreach (var hwnd in candidates)
         {
-            if (TryHandleCandidate(triggerId, routes, hwnd, pass))
+            var wi = _info.GetInfo(hwnd);
+            LogCandidate(wi);
+
+            foreach (var rule in _matcher.GetMatches(wi))
             {
-                return true;
+                if (!routes.TryGetValue(rule.Id, out var action))
+                {
+                    _logMatch.LogDebug("trigger={trigger} rule={rule} prio={prio} action=missing skip=1", triggerId, rule.Id, rule.Prio);
+                    continue;
+                }
+
+                _logMatch.LogInformation(
+                    "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio}",
+                    triggerId,
+                    (nuint)wi.Hwnd,
+                    wi.Pid,
+                    wi.ProcessName,
+                    wi.ClassName,
+                    wi.Title,
+                    rule.Id,
+                    rule.Prio);
+
+                return ExecuteAction(triggerId, rule, action, hwnd);
             }
         }
 
         return false;
     }
 
-    private nint[] GetCandidates(bool includeAllWindows)
+    private bool TryHandleGlobalFallback(
+        string triggerId,
+        Dictionary<string, (RouteActionType Type, string Id)> routes)
     {
-        var candidates = _selector.GetCandidates(_targetSearchDepth);
-        if (!includeAllWindows)
+        var globalRules = _matcher.GetRulesInPriorityOrder()
+            .Where(rule => routes.TryGetValue(rule.Id, out var action) && IsGlobalAction(action))
+            .ToArray();
+
+        if (globalRules.Length == 0)
         {
-            return candidates;
+            return false;
         }
 
-        var set = new HashSet<nint>(candidates);
-        var list = candidates.ToList();
+        var windows = _info.GetTopLevelWindows()
+            .Where(hwnd => hwnd != 0)
+            .ToArray();
 
-        foreach (var hwnd in _info.GetTopLevelWindows())
+        if (windows.Length == 0)
         {
-            if (hwnd == 0 || !set.Add(hwnd))
+            return false;
+        }
+
+        var infos = windows
+            .Select(hwnd => _info.GetInfo(hwnd))
+            .ToArray();
+
+        foreach (var rule in globalRules)
+        {
+            var action = routes[rule.Id];
+            foreach (var wi in infos)
             {
-                continue;
-            }
+                LogCandidate(wi);
+                if (!_matcher.IsMatch(wi, rule))
+                {
+                    continue;
+                }
 
-            list.Add(hwnd);
+                _logMatch.LogInformation(
+                    "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio} fallback=global",
+                    triggerId,
+                    (nuint)wi.Hwnd,
+                    wi.Pid,
+                    wi.ProcessName,
+                    wi.ClassName,
+                    wi.Title,
+                    rule.Id,
+                    rule.Prio);
+
+                return ExecuteAction(triggerId, rule, action, wi.Hwnd);
+            }
         }
 
-        return list.ToArray();
+        return false;
     }
 
     private bool IsGlobalAction((RouteActionType Type, string Id) action)
@@ -267,55 +308,9 @@ internal sealed class Router
             && shortcut.Mode == SendMode.Global;
     }
 
-    private bool TryHandleCandidate(
-        string triggerId,
-        Dictionary<string, (RouteActionType Type, string Id)> routes,
-        nint hwnd,
-        RoutingPass pass)
+    private void LogCandidate(WindowInfo wi)
     {
-        var wi = _info.GetInfo(hwnd);
         _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
-
-        var rule = _matcher.Match(wi);
-        if (rule is null)
-        {
-            return false;
-        }
-
-        if (!routes.TryGetValue(rule.Id, out var action))
-        {
-            _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} action=missing", triggerId, rule.Id, rule.Prio);
-            return true;
-        }
-
-        if (!IsActionInPass(action, pass))
-        {
-            return false;
-        }
-
-        _logMatch.LogInformation(
-            "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio}",
-            triggerId,
-            (nuint)wi.Hwnd,
-            wi.Pid,
-            wi.ProcessName,
-            wi.ClassName,
-            wi.Title,
-            rule.Id,
-            rule.Prio);
-
-        return ExecuteAction(triggerId, rule, action, hwnd);
-    }
-
-    private bool IsActionInPass((RouteActionType Type, string Id) action, RoutingPass pass)
-    {
-        var isGlobal = IsGlobalAction(action);
-        return pass switch
-        {
-            RoutingPass.GlobalOnly => isGlobal,
-            RoutingPass.NonGlobalOnly => !isGlobal,
-            _ => true,
-        };
     }
 
     private bool ExecuteAction(string triggerId, TargetRuleConfig rule, (RouteActionType Type, string Id) action, nint hwnd)
