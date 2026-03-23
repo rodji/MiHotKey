@@ -5,6 +5,7 @@ internal static class LogCategories
     public const string InputWmi = "Input.WMI";
     public const string InputHotkey = "Input.Hotkey";
     public const string InputLogi = "Input.Logi";
+    public const string Ipc = "IPC";
     public const string Trigger = "Trigger";
     public const string Target = "Target";
     public const string Match = "Match";

@@ -183,6 +183,11 @@ internal sealed class AppRuntime : IDisposable
         return _router.RunProgram(programId, context: "ui");
     }
 
+    public RouteInvocationResult InvokeRoute(string triggerId, string? context)
+    {
+        return _router.InvokeTrigger(triggerId, context);
+    }
+
     public void SetForegroundTrackingEnabled(bool enabled)
     {
         _foregroundTracking.SetOverride(enabled);

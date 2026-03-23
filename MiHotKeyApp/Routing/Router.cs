@@ -100,22 +100,33 @@ internal sealed class Router
 
     public void HandleTrigger(string triggerId)
     {
+        _ = InvokeTrigger(triggerId, context: null);
+    }
+
+    public RouteInvocationResult InvokeTrigger(string triggerId, string? context)
+    {
         if (!_routesByTrigger.TryGetValue(triggerId, out var routes))
         {
             _logMatch.LogInformation("trigger={trigger} routes=missing", triggerId);
-            return;
+            return RouteInvocationResult.MissingTrigger(triggerId);
         }
 
-        if (TryHandleUnconditional(triggerId, routes))
+        if (TryHandleUnconditional(triggerId, routes, context, out var unconditionalResult))
         {
-            return;
+            return unconditionalResult;
         }
 
-        HandleRoutedTrigger(triggerId, routes);
+        return HandleRoutedTrigger(triggerId, routes, context);
     }
 
-    private bool TryHandleUnconditional(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
+    private bool TryHandleUnconditional(
+        string triggerId,
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        string? context,
+        out RouteInvocationResult result)
     {
+        result = default;
+
         if (!routes.TryGetValue("", out var action))
         {
             return false;
@@ -126,6 +137,7 @@ internal sealed class Router
             if (!_shortcuts.TryGetValue(action.Id, out var shortcut))
             {
                 _logMatch.LogInformation("trigger={trigger} rule=any shortcut={shortcut} missing=1", triggerId, action.Id);
+                result = RouteInvocationResult.ExecutionFailed($"configured shortcut not found: {action.Id}");
                 return true;
             }
 
@@ -136,6 +148,10 @@ internal sealed class Router
             {
                 _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, res.Ok ? 1 : 0);
             }
+
+            result = res.Ok
+                ? RouteInvocationResult.Success($"route executed: {triggerId}")
+                : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
             return true;
         }
 
@@ -144,11 +160,15 @@ internal sealed class Router
             if (!_programs.TryGetValue(action.Id, out var program))
             {
                 _logMatch.LogInformation("trigger={trigger} rule=any program={program} missing=1", triggerId, action.Id);
+                result = RouteInvocationResult.ExecutionFailed($"configured program not found: {action.Id}");
                 return true;
             }
 
             _logExec.LogInformation("trigger={trigger} rule=any program={program}", triggerId, action.Id);
-            _ = _programRunner.TryStart(action.Id, program, context: $"trigger={triggerId} rule=<any>");
+            var ok = _programRunner.TryStart(action.Id, program, context: BuildContext(triggerId, "<any>", context));
+            result = ok
+                ? RouteInvocationResult.Success($"route executed: {triggerId}")
+                : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
             return true;
         }
 
@@ -157,15 +177,20 @@ internal sealed class Router
             if (!_audioDevices.TryGetValue(action.Id, out var audio))
             {
                 _logMatch.LogInformation("trigger={trigger} rule=any audio={audio} missing=1", triggerId, action.Id);
+                result = RouteInvocationResult.ExecutionFailed($"configured audio action not found: {action.Id}");
                 return true;
             }
 
             _logAudio.LogInformation("trigger={trigger} rule=any audio={audio}", triggerId, action.Id);
-            _ = _audio.Execute(action.Id, audio, context: $"trigger={triggerId} rule=<any>");
+            var ok = _audio.Execute(action.Id, audio, context: BuildContext(triggerId, "<any>", context));
+            result = ok
+                ? RouteInvocationResult.Success($"route executed: {triggerId}")
+                : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
             return true;
         }
 
         _logMatch.LogInformation("trigger={trigger} rule=any actionType={type} unsupported=1", triggerId, action.Type);
+        result = RouteInvocationResult.ExecutionFailed($"unsupported action type for route: {triggerId}");
         return true;
     }
 
@@ -186,25 +211,32 @@ internal sealed class Router
         return SendResult.Logged(_sender.Send(shortcut.Shortcut, shortcut.Mode, _timing));
     }
 
-    private void HandleRoutedTrigger(string triggerId, Dictionary<string, (RouteActionType Type, string Id)> routes)
+    private RouteInvocationResult HandleRoutedTrigger(
+        string triggerId,
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        string? context)
     {
-        if (TryHandleHistoryPass(triggerId, routes))
+        if (TryHandleHistoryPass(triggerId, routes, context, out var historyResult))
         {
-            return;
+            return historyResult;
         }
 
-        if (TryHandleGlobalFallback(triggerId, routes))
+        if (TryHandleGlobalFallback(triggerId, routes, context, out var globalResult))
         {
-            return;
+            return globalResult;
         }
 
         _logMatch.LogInformation("none");
+        return RouteInvocationResult.NoMatch(triggerId);
     }
 
     private bool TryHandleHistoryPass(
         string triggerId,
-        Dictionary<string, (RouteActionType Type, string Id)> routes)
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        string? context,
+        out RouteInvocationResult result)
     {
+        result = default;
         var candidates = _selector.GetCandidates(_targetSearchDepth);
         if (candidates.Length == 0)
         {
@@ -235,7 +267,8 @@ internal sealed class Router
                     rule.Id,
                     rule.Prio);
 
-                return ExecuteAction(triggerId, rule, action, hwnd);
+                result = ExecuteAction(triggerId, rule, action, hwnd, context);
+                return true;
             }
         }
 
@@ -244,8 +277,11 @@ internal sealed class Router
 
     private bool TryHandleGlobalFallback(
         string triggerId,
-        Dictionary<string, (RouteActionType Type, string Id)> routes)
+        Dictionary<string, (RouteActionType Type, string Id)> routes,
+        string? context,
+        out RouteInvocationResult result)
     {
+        result = default;
         var globalRules = _matcher.GetRulesInPriorityOrder()
             .Where(rule => routes.TryGetValue(rule.Id, out var action) && IsGlobalAction(action))
             .ToArray();
@@ -290,7 +326,8 @@ internal sealed class Router
                     rule.Id,
                     rule.Prio);
 
-                return ExecuteAction(triggerId, rule, action, wi.Hwnd);
+                result = ExecuteAction(triggerId, rule, action, wi.Hwnd, context);
+                return true;
             }
         }
 
@@ -313,7 +350,12 @@ internal sealed class Router
         _logTarget.LogDebug("cand hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\"", (nuint)wi.Hwnd, wi.Pid, wi.ProcessName, wi.ClassName, wi.Title);
     }
 
-    private bool ExecuteAction(string triggerId, TargetRuleConfig rule, (RouteActionType Type, string Id) action, nint hwnd)
+    private RouteInvocationResult ExecuteAction(
+        string triggerId,
+        TargetRuleConfig rule,
+        (RouteActionType Type, string Id) action,
+        nint hwnd,
+        string? context)
     {
         if (action.Type == RouteActionType.Shortcut)
         {
@@ -322,24 +364,24 @@ internal sealed class Router
 
         if (action.Type == RouteActionType.Program)
         {
-            return ExecuteProgram(triggerId, rule, action.Id, hwnd);
+            return ExecuteProgram(triggerId, rule, action.Id, hwnd, context);
         }
 
         if (action.Type == RouteActionType.Audio)
         {
-            return ExecuteAudio(triggerId, rule, action.Id, hwnd);
+            return ExecuteAudio(triggerId, rule, action.Id, hwnd, context);
         }
 
         _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} actionType={type} unsupported=1", triggerId, rule.Id, rule.Prio, action.Type);
-        return true;
+        return RouteInvocationResult.ExecutionFailed($"unsupported action type for route: {triggerId}");
     }
 
-    private bool ExecuteShortcut(string triggerId, TargetRuleConfig rule, string shortcutId, nint hwnd)
+    private RouteInvocationResult ExecuteShortcut(string triggerId, TargetRuleConfig rule, string shortcutId, nint hwnd)
     {
         if (!_shortcuts.TryGetValue(shortcutId, out var shortcut))
         {
             _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut} missing=1", triggerId, rule.Id, rule.Prio, shortcutId);
-            return true;
+            return RouteInvocationResult.ExecutionFailed($"configured shortcut not found: {shortcutId}");
         }
 
         _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} shortcut={shortcut}", triggerId, rule.Id, rule.Prio, shortcutId);
@@ -349,7 +391,10 @@ internal sealed class Router
         {
             _logSend.LogInformation("mode={mode} keys=\"{keys}\" ok={ok}", shortcut.Mode, shortcut.Shortcut.Text, res.Ok ? 1 : 0);
         }
-        return true;
+
+        return res.Ok
+            ? RouteInvocationResult.Success($"route executed: {triggerId}")
+            : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
     }
 
     private SendResult SendShortcutToWindow(nint hwnd, (ParsedShortcut Shortcut, SendMode Mode) shortcut)
@@ -378,30 +423,34 @@ internal sealed class Router
         return SendResult.Logged(_focus.TryActivateTemporarily(hwnd, () => _sender.Send(shortcut.Shortcut, shortcut.Mode, _timing)));
     }
 
-    private bool ExecuteProgram(string triggerId, TargetRuleConfig rule, string programId, nint hwnd)
+    private RouteInvocationResult ExecuteProgram(string triggerId, TargetRuleConfig rule, string programId, nint hwnd, string? context)
     {
         if (!_programs.TryGetValue(programId, out var program))
         {
             _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program} missing=1", triggerId, rule.Id, rule.Prio, programId);
-            return true;
+            return RouteInvocationResult.ExecutionFailed($"configured program not found: {programId}");
         }
 
         _logExec.LogInformation("trigger={trigger} rule={rule} prio={prio} program={program}", triggerId, rule.Id, rule.Prio, programId);
-        _ = _programRunner.TryStart(programId, program, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
-        return true;
+        var ok = _programRunner.TryStart(programId, program, context: BuildContext(triggerId, rule.Id, context, hwnd));
+        return ok
+            ? RouteInvocationResult.Success($"route executed: {triggerId}")
+            : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
     }
 
-    private bool ExecuteAudio(string triggerId, TargetRuleConfig rule, string audioId, nint hwnd)
+    private RouteInvocationResult ExecuteAudio(string triggerId, TargetRuleConfig rule, string audioId, nint hwnd, string? context)
     {
         if (!_audioDevices.TryGetValue(audioId, out var audio))
         {
             _logMatch.LogInformation("trigger={trigger} rule={rule} prio={prio} audio={audio} missing=1", triggerId, rule.Id, rule.Prio, audioId);
-            return true;
+            return RouteInvocationResult.ExecutionFailed($"configured audio action not found: {audioId}");
         }
 
         _logAudio.LogInformation("trigger={trigger} rule={rule} prio={prio} audio={audio}", triggerId, rule.Id, rule.Prio, audioId);
-        _ = _audio.Execute(audioId, audio, context: $"trigger={triggerId} rule={rule.Id} hwnd=0x{(nuint)hwnd:X}");
-        return true;
+        var ok = _audio.Execute(audioId, audio, context: BuildContext(triggerId, rule.Id, context, hwnd));
+        return ok
+            ? RouteInvocationResult.Success($"route executed: {triggerId}")
+            : RouteInvocationResult.ExecutionFailed($"route execution failed: {triggerId}");
     }
 
     public bool RunProgram(string programId, string? context)
@@ -413,5 +462,13 @@ internal sealed class Router
         }
 
         return _programRunner.TryStart(programId, program, context);
+    }
+
+    private static string BuildContext(string triggerId, string ruleId, string? context, nint hwnd = default)
+    {
+        var suffix = string.IsNullOrWhiteSpace(context) ? "" : $" src={context}";
+        return hwnd == 0
+            ? $"trigger={triggerId} rule={ruleId}{suffix}"
+            : $"trigger={triggerId} rule={ruleId} hwnd=0x{(nuint)hwnd:X}{suffix}";
     }
 }
