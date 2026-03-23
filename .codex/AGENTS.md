@@ -20,3 +20,8 @@
   - config behavior/semantics change.
 
 - Do not finish a config-related task without checking `CONFIG.md` consistency.
+
+
+- If prompt begins with 'FULL:' treat it as requirement to do tasks after finishing:
+ - run tasks dotnet publish
+ - create a commit with bried description

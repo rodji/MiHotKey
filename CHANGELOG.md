@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-23 History-first routing with global fallback
+
+### Intention/Task
+- Make recent window history the primary routing signal for mixed Meet/Teams-style scenarios.
+- Keep `global` shortcuts as a narrow fallback instead of letting any matching top-level app preempt history.
+
+### Changed
+- Reworked routing order to scan recent windows first and evaluate matching target rules by descending `prio` within each window.
+- Stopped treating a matched target rule without a route for the current trigger as terminal; routing now skips it and continues searching.
+- Added a dedicated top-level fallback pass that only considers routes whose shortcut uses `send: "global"`.
+- Extended `WindowRuleMatcher` with ordered-match helpers used by the new routing flow.
+- Updated EN/RU config docs to describe the history-first plus global-fallback behavior.
+
 ## 2026-03-04 Logitech lock debounce tuning
 
 ### Intention/Task
