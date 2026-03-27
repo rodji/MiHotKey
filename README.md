@@ -11,3 +11,7 @@ A small Windows tray utility that binds triggers (global hotkeys, WMI events) to
 ## Configuration
 
 Schema and examples are in `CONFIG.md`.
+
+Operational notes are in `MiHotKeyApp/DOC.md`.
+
+Technical design notes are in `DESIGN.md`.

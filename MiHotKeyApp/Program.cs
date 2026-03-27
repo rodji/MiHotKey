@@ -5,10 +5,14 @@ using MiHotKeyApp.Ipc;
 using MiHotKeyApp.Logging;
 using MiHotKeyApp.Routing;
 using MiHotKeyApp.UI;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 internal static class Program
 {
+    private const int BootstrapTimeoutMs = 10_000;
+    private const int BootstrapRetryDelayMs = 100;
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -18,26 +22,12 @@ internal static class Program
             return Exit(launchCommand.ExitCode, launchCommand.Message, isError: true);
         }
 
-        using var instanceLock = SingleInstanceLock.Create(AppContext.BaseDirectory);
-
         if (launchCommand.Kind == AppLaunchCommandKind.CallRoute)
         {
-            if (!instanceLock.IsPrimary)
-            {
-                var response = AppCommandClient.Send(instanceLock.PipeName, launchCommand.ToIpcRequest());
-                return Exit(response.ExitCode, response.Output, isError: response.ExitCode != AppExitCodes.Success);
-            }
-
-            // TODO: Bootstrap-on-demand could start the tray/runtime in the background,
-            // wait until the named pipe server is ready, and then resend the command.
-            // For now we fail fast so one-shot CLI usage does not unexpectedly leave
-            // behind a new resident tray instance with partially initialized state.
-            return Exit(
-                AppExitCodes.InstanceNotRunning,
-                "MiHotKey is not running. Planned follow-up: optionally bootstrap the tray instance, wait for IPC readiness, and resend the command.",
-                isError: true);
+            return ExecuteCallRoute(launchCommand);
         }
 
+        using var instanceLock = SingleInstanceLock.Create(AppContext.BaseDirectory);
         if (!instanceLock.IsPrimary)
         {
             return AppExitCodes.Success;
@@ -52,7 +42,8 @@ internal static class Program
         runtime.Start();
         var logIpc = runtime.LoggerFactory.CreateLogger(LogCategories.Ipc);
         using var ipcServer = new AppCommandPipeServer(
-            instanceLock.PipeName,
+            instanceLock.LoopbackPort,
+            instanceLock.AuthToken,
             request => DispatchIpcCommandAsync(request, runtime, ui, logIpc),
             logIpc);
         ipcServer.Start();
@@ -108,6 +99,11 @@ internal static class Program
 
     private static AppCommandResponse HandleIpcCommand(AppCommandRequest request, AppRuntime runtime, ILogger logger)
     {
+        if (string.Equals(request.Command, AppCommandRequest.PingCommand, StringComparison.OrdinalIgnoreCase))
+        {
+            return new AppCommandResponse(AppExitCodes.Success, "ready");
+        }
+
         if (!string.Equals(request.Command, AppCommandRequest.CallRouteCommand, StringComparison.OrdinalIgnoreCase))
         {
             return new AppCommandResponse(AppExitCodes.InvalidArguments, $"Unsupported IPC command: {request.Command}");
@@ -133,6 +129,84 @@ internal static class Program
             RouteInvocationStatus.ExecutionFailed => new AppCommandResponse(AppExitCodes.RouteExecutionFailed, result.Message),
             _ => new AppCommandResponse(AppExitCodes.InternalError, result.Message),
         };
+    }
+
+    private static int ExecuteCallRoute(AppLaunchCommand launchCommand)
+    {
+        var loopbackPort = AppIpcNames.GetLoopbackPort(AppContext.BaseDirectory);
+        var authToken = AppIpcNames.GetAuthToken(AppContext.BaseDirectory);
+        var request = launchCommand.ToIpcRequest(authToken);
+
+        var sendResult = AppCommandClient.Send(loopbackPort, request);
+        if (!sendResult.IsTransportFailure)
+        {
+            return Exit(sendResult.Response.ExitCode, sendResult.Response.Output, isError: sendResult.Response.ExitCode != AppExitCodes.Success);
+        }
+
+        using var bootstrapProcess = TryStartResidentProcess();
+        if (!WaitForResidentReady(loopbackPort, authToken, bootstrapProcess))
+        {
+            return Exit(
+                AppExitCodes.ResidentUnavailable,
+                "MiHotKey resident is unavailable after bootstrap attempt.",
+                isError: true);
+        }
+
+        var finalResult = AppCommandClient.Send(loopbackPort, request);
+        return Exit(finalResult.Response.ExitCode, finalResult.Response.Output, isError: finalResult.Response.ExitCode != AppExitCodes.Success);
+    }
+
+    private static Process? TryStartResidentProcess()
+    {
+        try
+        {
+            var processPath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(processPath))
+            {
+                return null;
+            }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = processPath,
+                WorkingDirectory = AppContext.BaseDirectory,
+                UseShellExecute = false,
+            };
+
+            return Process.Start(psi);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool WaitForResidentReady(int loopbackPort, string authToken, Process? bootstrapProcess)
+    {
+        var startedAt = Stopwatch.StartNew();
+        while (startedAt.ElapsedMilliseconds < BootstrapTimeoutMs)
+        {
+            var pingResult = AppCommandClient.Ping(loopbackPort, authToken);
+            if (pingResult.Response.ExitCode == AppExitCodes.Success)
+            {
+                return true;
+            }
+
+            if (bootstrapProcess is not null)
+            {
+                try
+                {
+                    _ = bootstrapProcess.HasExited;
+                }
+                catch
+                {
+                }
+            }
+
+            Thread.Sleep(BootstrapRetryDelayMs);
+        }
+
+        return false;
     }
 
     private static int Exit(int exitCode, string? text, bool isError)

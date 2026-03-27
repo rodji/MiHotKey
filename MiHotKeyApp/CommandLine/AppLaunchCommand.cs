@@ -33,8 +33,8 @@ internal sealed record AppLaunchCommand(AppLaunchCommandKind Kind, string? Route
             "Usage: MiHotKeyApp.exe call route <name>");
     }
 
-    public AppCommandRequest ToIpcRequest()
+    public AppCommandRequest ToIpcRequest(string token)
     {
-        return new AppCommandRequest(AppCommandRequest.CallRouteCommand, RouteName ?? "");
+        return new AppCommandRequest(AppCommandRequest.CallRouteCommand, RouteName ?? "", token);
     }
 }

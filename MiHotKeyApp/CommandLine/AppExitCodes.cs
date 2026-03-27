@@ -5,7 +5,7 @@ internal static class AppExitCodes
     public const int Success = 0;
     public const int InvalidArguments = 2;
 
-    public const int InstanceNotRunning = 10;
+    public const int ResidentUnavailable = 10;
     public const int IpcUnavailable = 11;
     public const int InternalError = 12;
 

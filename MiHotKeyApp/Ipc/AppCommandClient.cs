@@ -1,47 +1,73 @@
 namespace MiHotKeyApp.Ipc;
 
-using System.IO.Pipes;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
-using System.Security.Principal;
 using MiHotKeyApp.CommandLine;
 
 internal static class AppCommandClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new();
 
-    public static AppCommandResponse Send(string pipeName, AppCommandRequest request)
+    public static AppCommandClientResult Send(int port, AppCommandRequest request)
     {
         try
         {
-            using var client = new NamedPipeClientStream(
-                ".",
-                pipeName,
-                PipeDirection.InOut,
-                PipeOptions.None,
-                TokenImpersonationLevel.Impersonation);
-            client.Connect(timeout: 3000);
+            using var client = new TcpClient(AddressFamily.InterNetwork);
+            client.Connect(IPAddress.Loopback, port);
 
-            JsonSerializer.Serialize(client, request, JsonOptions);
-            client.Flush();
+            using var stream = client.GetStream();
+            stream.ReadTimeout = 3000;
+            stream.WriteTimeout = 3000;
+            using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true)
+            {
+                AutoFlush = true,
+            };
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
 
-            var response = JsonSerializer.Deserialize<AppCommandResponse>(client, JsonOptions);
-            return response ?? new AppCommandResponse(AppExitCodes.InternalError, "IPC returned no response.");
+            writer.WriteLine(JsonSerializer.Serialize(request, JsonOptions));
+            var responseLine = reader.ReadLine();
+            if (string.IsNullOrWhiteSpace(responseLine))
+            {
+                return ProtocolFailure("IPC returned no response.");
+            }
+
+            var response = JsonSerializer.Deserialize<AppCommandResponse>(responseLine, JsonOptions);
+            return response is null
+                ? ProtocolFailure("IPC returned no response.")
+                : new AppCommandClientResult(AppCommandClientStatus.Success, response);
         }
-        catch (TimeoutException)
+        catch (SocketException ex)
         {
-            return new AppCommandResponse(AppExitCodes.IpcUnavailable, "MiHotKey is running but the IPC endpoint did not respond in time.");
+            return TransportFailure($"IPC transport failed: {ex.Message}");
         }
         catch (IOException ex)
         {
-            return new AppCommandResponse(AppExitCodes.IpcUnavailable, $"IPC transport failed: {ex.Message}");
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return new AppCommandResponse(AppExitCodes.IpcUnavailable, $"IPC access denied: {ex.Message}");
+            return TransportFailure($"IPC transport failed: {ex.Message}");
         }
         catch (JsonException ex)
         {
-            return new AppCommandResponse(AppExitCodes.InternalError, $"IPC protocol error: {ex.Message}");
+            return ProtocolFailure($"IPC protocol error: {ex.Message}");
         }
+    }
+
+    public static AppCommandClientResult Ping(int port, string token)
+    {
+        return Send(port, new AppCommandRequest(AppCommandRequest.PingCommand, "", token));
+    }
+
+    private static AppCommandClientResult TransportFailure(string message)
+    {
+        return new AppCommandClientResult(
+            AppCommandClientStatus.TransportFailure,
+            new AppCommandResponse(AppExitCodes.IpcUnavailable, message));
+    }
+
+    private static AppCommandClientResult ProtocolFailure(string message)
+    {
+        return new AppCommandClientResult(
+            AppCommandClientStatus.ProtocolFailure,
+            new AppCommandResponse(AppExitCodes.InternalError, message));
     }
 }

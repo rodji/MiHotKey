@@ -184,10 +184,10 @@
   "programs": {
     "notepad": {
       "title": "Notepad",
-      "file": "notepad.exe",
+      "file": "%WINDIR%\\System32\\notepad.exe",
       "args": "",
       "workdir": "",
-      "useShellExecute": true,
+      "useShellExecute": false,
       "hidden": false,
       "captureOutput": false,
       "env": {}
