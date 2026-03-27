@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-27 Documentation maintenance, design doc, and operational notes
+
+### Task
+- Merge stronger Codex workflow rules into `.codex/AGENTS.md`.
+- Restore missing technical design documentation and improve user-facing non-config docs.
+- Re-sync `DESIGN.md` with the current `version: 2` implementation after routing, diagnostics, Logitech, audio, and IPC evolved further.
+- Tighten `DESIGN.md` again where runtime responsibilities and routing precedence drifted from the actual code.
+
+### Changed
+- Expanded `.codex/AGENTS.md` with required updates for `CHANGELOG.md`, `DESIGN.md`, and `MiHotKeyApp/DOC.md`.
+- Refined `.codex/AGENTS.md` so `dotnet build` and `dotnet publish -c Release` are required only for code/project changes, not for documentation-only edits.
+- Added a new `DESIGN.md` that documents the current runtime architecture, routing flow, single-instance behavior, IPC path, tray responsibilities, and packaging assumptions.
+- Reworked `MiHotKeyApp/DOC.md` into user-facing operational notes for tray usage, CLI route calls, diagnostics, and exit codes.
+- Updated `DESIGN.md` again to match the current code: `routesByTrigger`, unconditional routes, Logitech input, foreground-tracking policy controller, audio/program action execution, and loopback-TCP IPC details.
+- Clarified in `DESIGN.md` that `Program.cs` owns process bootstrap / IPC / tray wiring, `app.targetSearchDepth=1` disables foreground history tracking, and routing remains history-first with a narrow global-shortcut fallback.
+- Completed the design notes for Logitech vendor-key release decoding, symbolic `logi:vendor-key:*` mappings, audio batch targeting semantics, and loopback bootstrap assumptions.
+- Tightened `DESIGN.md` around input repeat/debounce handling, the real log-window behavior (last 100 filtered lines with coalesced refresh), and the checked-in `FolderProfile` publish assumptions (`win-x86`, single-file, ReadyToRun).
+- Completed `DESIGN.md` with the remaining runtime details that were still easy to infer only from code: default-config startup fallback, validator responsibilities, how hotkeys differ from bound source events, and the helper audio-config lines emitted by diagnostics.
+
+### Why
+- Keep repository instructions aligned with the way the project is now maintained.
+- Separate config schema, user workflows, and technical design so each doc stays focused and easier to keep current.
+- Prevent the design document from drifting behind the actual runtime behavior and config model.
+- Make the design doc dependable during future refactors by documenting the real routing precedence instead of older experiments.
+
 ## 2026-03-23 History-first routing with global fallback
 
 ### Intention/Task
