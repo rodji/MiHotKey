@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-21 Root/visible window filtering for foreground history and global fallback
+
+### Task
+- Stop transient shell and system-surfaces from polluting short alt-tab memory and top-level global fallback matching.
+
+### Changed
+- Added a shared target-window eligibility filter used by foreground-history capture, recent-candidate selection, and global fallback scanning.
+- Limited eligible windows to visible root windows and excluded known shell/task-switcher classes such as `ForegroundStaging`, `ThumbnailDeviceHelperWnd`, `tooltips_class32`, and taskbar surfaces.
+- Removed the old class blacklist duplication from `ForegroundTracker` and centralized it in one place.
+
+### Why
+- Explorer-owned shell surfaces could displace real app windows like Chrome or Teams in recent-history routing.
+- Using the same filter for history and fallback keeps routing behavior more predictable and easier to debug.
+
 ## 2026-04-20 Window-title timeout hardening for tray responsiveness
 
 ### Intention/Task

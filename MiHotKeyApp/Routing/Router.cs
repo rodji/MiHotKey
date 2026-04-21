@@ -315,7 +315,7 @@ internal sealed class Router
         }
 
         var windows = _info.GetTopLevelWindows()
-            .Where(hwnd => hwnd != 0)
+            .Where(WindowCandidateFilter.IsEligible)
             .ToArray();
 
         if (windows.Length == 0)

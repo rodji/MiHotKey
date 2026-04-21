@@ -117,7 +117,14 @@ For the observed MX Keys Bluetooth vendor packet shape (`11 FF 08 00 00 <code> .
 
 Window targeting is history-first.
 
-`ForegroundTracker` records recent foreground windows through `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`. It intentionally filters system surfaces such as the taskbar, task-switcher UI, and desktop shell windows so they do not pollute recent-window history.
+`ForegroundTracker` records recent foreground windows through `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`. It intentionally keeps only eligible target windows in history so shell/transient UI does not pollute recent-window routing.
+
+Eligible target windows are currently defined as:
+
+- valid Win32 windows
+- visible windows
+- root windows (`GetAncestor(..., GA_ROOT) == hwnd`)
+- not one of the known shell/task-switcher/desktop helper classes such as taskbar windows, `ForegroundStaging`, `ThumbnailDeviceHelperWnd`, `tooltips_class32`, `XamlExplorerHostIslandWindow`, `Progman`, or `WorkerW`
 
 `ForegroundTrackingController` manages whether the hook should stay active:
 
@@ -173,7 +180,7 @@ Routing order is:
 1. Check whether the trigger has an unconditional route (`rule` empty).
 2. Search recent foreground-history candidates up to `app.targetSearchDepth`.
 3. For each candidate window, evaluate process/class eligibility first, then load the title only if one of the surviving rules needs title matching.
-4. If nothing matches, run a global fallback pass across top-level windows, but only for shortcut routes whose send mode is `Global`.
+4. If nothing matches, run a global fallback pass across eligible top-level windows, but only for shortcut routes whose send mode is `Global`.
 
 The two routed passes use different precedence:
 
@@ -188,6 +195,7 @@ Important routing semantics:
 - recent-history matching is attempted before the global fallback pass, so a recent non-global target can win over an older global-only candidate
 - `HandleTrigger(...)` and `InvokeTrigger(...)` share the same routing logic; the latter just preserves a structured result for IPC and CLI callers
 - routing still runs on the app's main synchronization context, so bounded Win32 inspection is important for keeping the tray responsive
+- the same eligible-window filter is applied consistently to foreground capture, history replay, current-foreground candidate selection, and global fallback enumeration
 
 ## Action Execution
 

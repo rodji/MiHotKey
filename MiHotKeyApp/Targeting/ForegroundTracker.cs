@@ -71,6 +71,11 @@ internal sealed class ForegroundTracker : IDisposable
     public (nint Foreground, nint Previous) GetForegroundAndPrevious()
     {
         var fg = User32.GetForegroundWindow();
+        if (!WindowCandidateFilter.IsEligible(fg))
+        {
+            fg = 0;
+        }
+
         nint prev = 0;
 
         lock (_gate)
@@ -85,7 +90,7 @@ internal sealed class ForegroundTracker : IDisposable
                 }
 
                 var h = _history[idx];
-                if (h != 0 && h != fg && !IsIgnoredWindow(h))
+                if (h != 0 && h != fg && WindowCandidateFilter.IsEligible(h))
                 {
                     prev = h;
                     break;
@@ -123,7 +128,7 @@ internal sealed class ForegroundTracker : IDisposable
 
     private void OnWinEvent(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
-        if (hwnd == 0 || IsIgnoredWindow(hwnd))
+        if (!WindowCandidateFilter.IsEligible(hwnd))
         {
             return;
         }
@@ -144,30 +149,6 @@ internal sealed class ForegroundTracker : IDisposable
             _next = 0;
             _count = 0;
         }
-    }
-
-    private static bool IsIgnoredWindow(nint hwnd)
-    {
-        if (hwnd == 0 || !User32.IsWindow(hwnd))
-        {
-            return true;
-        }
-
-        var cls = User32.GetWindowClassName(hwnd);
-        if (cls.Length == 0)
-        {
-            return false;
-        }
-
-        // Taskbar and system UI surfaces.
-        return cls.Equals("Shell_TrayWnd", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("TaskListThumbnailWnd", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("MultitaskingViewFrame", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("XamlExplorerHostIslandWindow", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("Progman", StringComparison.OrdinalIgnoreCase)
-            || cls.Equals("WorkerW", StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()

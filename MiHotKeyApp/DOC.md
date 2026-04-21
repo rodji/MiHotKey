@@ -82,7 +82,7 @@ $p.ExitCode
 
 - foreground tracking status and current mode
 - current foreground window and previous window
-- recent foreground history
+- recent foreground history (eligible app windows only, excluding known shell/task-switcher helper surfaces)
 - top-level windows snapshot
 - audio devices snapshot
 

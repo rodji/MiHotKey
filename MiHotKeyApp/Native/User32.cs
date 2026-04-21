@@ -5,6 +5,8 @@ using System.Text;
 
 internal static class User32
 {
+    public const uint GA_ROOT = 2;
+
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
@@ -97,7 +99,13 @@ internal static class User32
     public static extern bool IsWindow(nint hWnd);
 
     [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(nint hWnd);
+
+    [DllImport("user32.dll")]
     public static extern bool IsHungAppWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetAncestor(nint hWnd, uint gaFlags);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
