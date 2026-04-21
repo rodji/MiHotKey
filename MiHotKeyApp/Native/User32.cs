@@ -8,6 +8,10 @@ internal static class User32
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+    public const uint WM_GETTEXT = 0x000D;
+    public const uint WM_GETTEXTLENGTH = 0x000E;
+    public const uint SMTO_BLOCK = 0x0001;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     public const uint INPUT_KEYBOARD = 1;
 
@@ -92,30 +96,58 @@ internal static class User32
     [DllImport("user32.dll")]
     public static extern bool IsWindow(nint hWnd);
 
+    [DllImport("user32.dll")]
+    public static extern bool IsHungAppWindow(nint hWnd);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]
-    public static extern int GetWindowTextLengthW(nint hWnd);
+    private static extern nint SendMessageTimeoutW(
+        nint hWnd,
+        uint msg,
+        nint wParam,
+        nint lParam,
+        uint fuFlags,
+        uint uTimeout,
+        out nint lpdwResult);
 
-    [DllImport("user32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]
-    public static extern int GetWindowTextW(nint hWnd, StringBuilder lpString, int nMaxCount);
-
-    public static string GetWindowTitle(nint hwnd)
+    public static bool TryGetWindowTitle(nint hwnd, int timeoutMs, out string title)
     {
+        title = "";
         if (hwnd == 0 || !IsWindow(hwnd))
         {
-            return "";
+            return true;
         }
 
-        // GetWindowTextLengthW is best-effort and may return 0 for some windows.
-        // Use a capped buffer; with correct CharSet.Unicode this is safe.
-        var len = GetWindowTextLengthW(hwnd);
-        var cap = Math.Clamp(len + 1, 2, 4096);
+        if (IsHungAppWindow(hwnd))
+        {
+            return false;
+        }
 
-        var sb = new StringBuilder(cap);
-        var copied = GetWindowTextW(hwnd, sb, sb.Capacity);
-        return copied > 0 ? sb.ToString() : "";
+        var flags = SMTO_BLOCK | SMTO_ABORTIFHUNG;
+        if (SendMessageTimeoutW(hwnd, WM_GETTEXTLENGTH, 0, 0, flags, (uint)Math.Max(1, timeoutMs), out var lenResult) == 0)
+        {
+            return false;
+        }
+
+        var cap = Math.Clamp((int)lenResult + 1, 2, 4096);
+        var buffer = Marshal.AllocHGlobal(cap * sizeof(char));
+        try
+        {
+            Marshal.WriteInt16(buffer, 0);
+            if (SendMessageTimeoutW(hwnd, WM_GETTEXT, (nint)cap, buffer, flags, (uint)Math.Max(1, timeoutMs), out _) == 0)
+            {
+                return false;
+            }
+
+            title = Marshal.PtrToStringUni(buffer) ?? "";
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     [DllImport("user32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Unicode)]

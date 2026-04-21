@@ -140,6 +140,12 @@ The tray menu can temporarily override the configured policy without editing the
 - class name
 - title patterns and backward-compatible title fields
 
+Window metadata lookup is intentionally defensive:
+
+- class and process metadata can be requested without forcing a title read
+- title lookup is bounded with `SendMessageTimeoutW(..., SMTO_ABORTIFHUNG, ...)` rather than an unbounded `GetWindowText` call
+- windows that appear hung can be skipped for title purposes, with a warning logged instead of blocking the resident app
+
 ## Routing Model
 
 Routing is driven by `routesByTrigger`.
@@ -166,13 +172,13 @@ Routing order is:
 
 1. Check whether the trigger has an unconditional route (`rule` empty).
 2. Search recent foreground-history candidates up to `app.targetSearchDepth`.
-3. For each candidate window, evaluate matching rules in descending priority order.
+3. For each candidate window, evaluate process/class eligibility first, then load the title only if one of the surviving rules needs title matching.
 4. If nothing matches, run a global fallback pass across top-level windows, but only for shortcut routes whose send mode is `Global`.
 
 The two routed passes use different precedence:
 
 - history pass: newer windows win first; within one window, higher-priority matching rules win first
-- global fallback: higher-priority global-capable rules win first; each such rule then scans top-level windows until it finds a match
+- global fallback: higher-priority global-capable rules win first; each such rule then scans top-level windows lazily until it finds a match
 
 Important routing semantics:
 
@@ -181,6 +187,7 @@ Important routing semantics:
 - global fallback is intentionally narrow and does not apply to program or audio routes
 - recent-history matching is attempted before the global fallback pass, so a recent non-global target can win over an older global-only candidate
 - `HandleTrigger(...)` and `InvokeTrigger(...)` share the same routing logic; the latter just preserves a structured result for IPC and CLI callers
+- routing still runs on the app's main synchronization context, so bounded Win32 inspection is important for keeping the tray responsive
 
 ## Action Execution
 

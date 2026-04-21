@@ -69,7 +69,7 @@ internal sealed class AppRuntime : IDisposable
         _foregroundTracking = new ForegroundTrackingController(_foreground, _session, _loggerFactory.CreateLogger(LogCategories.Config));
 
         _selector = new TargetSelector(_foreground);
-        _windowInfo = new WindowInfoProvider();
+        _windowInfo = new WindowInfoProvider(_loggerFactory.CreateLogger(LogCategories.Target));
         _matcher = new WindowRuleMatcher();
         _focus = new FocusController();
         _sender = new KeySender(_loggerFactory.CreateLogger(LogCategories.Send));

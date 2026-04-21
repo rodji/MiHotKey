@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-04-20 Window-title timeout hardening for tray responsiveness
+
+### Intention/Task
+- Prevent a hung or slow external window from freezing the resident tray app during routing.
+- Make post-resume / post-hibernate window inspection safer without needing to identify a specific offending application.
+
+### Changed
+- Replaced unbounded window-title reads with a timeout-based title query using `SendMessageTimeoutW(..., SMTO_ABORTIFHUNG, ...)`.
+- Added an early hung-window check via `IsHungAppWindow` before attempting title retrieval.
+- Updated `WindowInfoProvider` so callers can request only the metadata they actually need instead of always fetching process, class, and title together.
+- Reworked routed matching to load process/class data first and only fetch window titles when a candidate rule actually requires title matching.
+- Reworked global fallback to scan windows lazily instead of materializing full `WindowInfo` for every top-level window up front.
+- Added warning logs when window-title retrieval times out so future investigations have a visible breadcrumb without sacrificing responsiveness.
+
+### Why
+- The tray UI, hotkey window, and routing work all share the WinForms message loop, so one blocking Win32 window-inspection call could make the whole app appear hung.
+- Timeout-based title reads and staged metadata loading reduce the chance that a broken or recovering window can stall the app after sleep, hibernate, or other shell instability.
+
 ## 2026-03-27 Documentation maintenance, design doc, and operational notes
 
 ### Task

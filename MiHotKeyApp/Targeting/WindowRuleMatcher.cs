@@ -39,6 +39,36 @@ internal sealed class WindowRuleMatcher
             .ToArray();
     }
 
+    public TargetRuleConfig[] GetPotentialMatchesWithoutTitle(WindowInfo info)
+    {
+        if (info.Hwnd == 0)
+        {
+            return [];
+        }
+
+        return _rules
+            .Where(rule => MatchesProcAndClass(rule, info))
+            .Select(static rule => rule.Raw)
+            .ToArray();
+    }
+
+    public bool RuleNeedsTitle(TargetRuleConfig rule)
+    {
+        return _rulesById.TryGetValue(rule.Id, out var compiled)
+            && compiled.TitlePatterns.Length > 0;
+    }
+
+    public bool MightMatchWithoutTitle(WindowInfo info, TargetRuleConfig rule)
+    {
+        if (info.Hwnd == 0)
+        {
+            return false;
+        }
+
+        return _rulesById.TryGetValue(rule.Id, out var compiled)
+            && MatchesProcAndClass(compiled, info);
+    }
+
     public bool IsMatch(WindowInfo info, TargetRuleConfig rule)
     {
         if (info.Hwnd == 0)
@@ -74,8 +104,31 @@ internal sealed class WindowRuleMatcher
             return false;
         }
 
-        var proc = NormalizeProc(info.ProcessName);
+        if (!MatchesProcAndClass(rule, info))
+        {
+            return false;
+        }
+
+        if (rule.TitlePatterns.Length == 0)
+        {
+            return true;
+        }
+
         var title = info.Title ?? "";
+        foreach (var re in rule.TitlePatterns)
+        {
+            if (re.IsMatch(title))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MatchesProcAndClass(CompiledRule rule, WindowInfo info)
+    {
+        var proc = NormalizeProc(info.ProcessName);
         var cls = info.ClassName ?? "";
 
         if (rule.Procs.Count > 0 && !rule.Procs.Contains(proc))
@@ -88,20 +141,7 @@ internal sealed class WindowRuleMatcher
             return false;
         }
 
-        if (rule.TitlePatterns.Length == 0)
-        {
-            return true;
-        }
-
-        foreach (var re in rule.TitlePatterns)
-        {
-            if (re.IsMatch(title))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 
     private static CompiledRule Compile(TargetRuleConfig rule)

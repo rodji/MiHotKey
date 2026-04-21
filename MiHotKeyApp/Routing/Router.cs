@@ -245,17 +245,40 @@ internal sealed class Router
 
         foreach (var hwnd in candidates)
         {
-            var wi = _info.GetInfo(hwnd);
-            LogCandidate(wi);
+            var baseInfo = _info.GetInfo(hwnd, WindowInfoFields.ProcessName | WindowInfoFields.ClassName);
+            LogCandidate(baseInfo);
 
-            foreach (var rule in _matcher.GetMatches(wi))
+            var candidateRules = _matcher.GetPotentialMatchesWithoutTitle(baseInfo);
+            if (candidateRules.Length == 0)
             {
+                continue;
+            }
+
+            var detailedInfo = baseInfo;
+            var titleLoaded = false;
+            foreach (var rule in candidateRules)
+            {
+                if (_matcher.RuleNeedsTitle(rule))
+                {
+                    if (!titleLoaded)
+                    {
+                        detailedInfo = _info.GetInfo(hwnd, WindowInfoFields.ProcessName | WindowInfoFields.Title | WindowInfoFields.ClassName);
+                        titleLoaded = true;
+                    }
+
+                    if (!_matcher.IsMatch(detailedInfo, rule))
+                    {
+                        continue;
+                    }
+                }
+
                 if (!routes.TryGetValue(rule.Id, out var action))
                 {
                     _logMatch.LogDebug("trigger={trigger} rule={rule} prio={prio} action=missing skip=1", triggerId, rule.Id, rule.Prio);
                     continue;
                 }
 
+                var wi = titleLoaded ? detailedInfo : baseInfo;
                 _logMatch.LogInformation(
                     "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio}",
                     triggerId,
@@ -300,33 +323,41 @@ internal sealed class Router
             return false;
         }
 
-        var infos = windows
-            .Select(hwnd => _info.GetInfo(hwnd))
-            .ToArray();
-
         foreach (var rule in globalRules)
         {
             var action = routes[rule.Id];
-            foreach (var wi in infos)
+            var needsTitle = _matcher.RuleNeedsTitle(rule);
+            foreach (var hwnd in windows)
             {
-                LogCandidate(wi);
-                if (!_matcher.IsMatch(wi, rule))
+                var baseInfo = _info.GetInfo(hwnd, WindowInfoFields.ProcessName | WindowInfoFields.ClassName);
+                LogCandidate(baseInfo);
+                if (!_matcher.MightMatchWithoutTitle(baseInfo, rule))
                 {
                     continue;
+                }
+
+                var info = baseInfo;
+                if (needsTitle)
+                {
+                    info = _info.GetInfo(hwnd, WindowInfoFields.ProcessName | WindowInfoFields.Title | WindowInfoFields.ClassName);
+                    if (!_matcher.IsMatch(info, rule))
+                    {
+                        continue;
+                    }
                 }
 
                 _logMatch.LogInformation(
                     "trigger={trigger} matched hwnd=0x{hwnd:X} pid={pid} proc={proc} cls={cls} title=\"{title}\" rule={rule} prio={prio} fallback=global",
                     triggerId,
-                    (nuint)wi.Hwnd,
-                    wi.Pid,
-                    wi.ProcessName,
-                    wi.ClassName,
-                    wi.Title,
+                    (nuint)info.Hwnd,
+                    info.Pid,
+                    info.ProcessName,
+                    info.ClassName,
+                    info.Title,
                     rule.Id,
                     rule.Prio);
 
-                result = ExecuteAction(triggerId, rule, action, wi.Hwnd, context);
+                result = ExecuteAction(triggerId, rule, action, info.Hwnd, context);
                 return true;
             }
         }
