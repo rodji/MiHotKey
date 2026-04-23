@@ -124,7 +124,12 @@ Eligible target windows are currently defined as:
 - valid Win32 windows
 - visible windows
 - root windows (`GetAncestor(..., GA_ROOT) == hwnd`)
-- not one of the known shell/task-switcher/desktop helper classes such as taskbar windows, `ForegroundStaging`, `ThumbnailDeviceHelperWnd`, `tooltips_class32`, `XamlExplorerHostIslandWindow`, `Progman`, or `WorkerW`
+- not DWM-cloaked windows
+- not extended-style helper surfaces such as `WS_EX_TOOLWINDOW` or `WS_EX_NOACTIVATE`
+- not owned popup windows unless they explicitly opt into app-window behavior with `WS_EX_APPWINDOW`
+- not one of the known shell/task-switcher/desktop/OSD helper classes such as taskbar windows, `ForegroundStaging`, `ThumbnailDeviceHelperWnd`, `tooltips_class32`, `XamlExplorerHostIslandWindow`, `Xaml_WindowedPopupClass`, `OnScreen Display Window`, `GDI+ Hook Window Class`, `Progman`, or `WorkerW`
+
+This intentionally approximates Alt-Tab-style targetability. Class-name exclusions remain for known shell or vendor helper surfaces, but the primary defense against garbage candidates is now window state and extended style rather than a pure blacklist.
 
 `ForegroundTrackingController` manages whether the hook should stay active:
 

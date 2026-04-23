@@ -6,6 +6,12 @@ using System.Text;
 internal static class User32
 {
     public const uint GA_ROOT = 2;
+    public const uint GW_OWNER = 4;
+
+    public const int GWL_EXSTYLE = -20;
+    public const long WS_EX_TOOLWINDOW = 0x00000080;
+    public const long WS_EX_APPWINDOW = 0x00040000;
+    public const long WS_EX_NOACTIVATE = 0x08000000;
 
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
@@ -106,6 +112,27 @@ internal static class User32
 
     [DllImport("user32.dll")]
     public static extern nint GetAncestor(nint hWnd, uint gaFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern nint GetWindow(nint hWnd, uint uCmd);
+
+    [DllImport("user32.dll", SetLastError = true, EntryPoint = "GetWindowLongW")]
+    private static extern int GetWindowLong32(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true, EntryPoint = "GetWindowLongPtrW")]
+    private static extern nint GetWindowLongPtr64(nint hWnd, int nIndex);
+
+    public static long GetWindowExStyle(nint hwnd)
+    {
+        if (hwnd == 0 || !IsWindow(hwnd))
+        {
+            return 0;
+        }
+
+        return Environment.Is64BitProcess
+            ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64()
+            : GetWindowLong32(hwnd, GWL_EXSTYLE);
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);

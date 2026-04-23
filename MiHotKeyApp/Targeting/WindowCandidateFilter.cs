@@ -17,7 +17,30 @@ internal static class WindowCandidateFilter
             return false;
         }
 
-        return !IsIgnoredClass(User32.GetWindowClassName(hwnd));
+        if (IsIgnoredClass(User32.GetWindowClassName(hwnd)))
+        {
+            return false;
+        }
+
+        if (DwmApi.IsWindowCloaked(hwnd))
+        {
+            return false;
+        }
+
+        var exStyle = User32.GetWindowExStyle(hwnd);
+        if ((exStyle & User32.WS_EX_TOOLWINDOW) != 0
+            || (exStyle & User32.WS_EX_NOACTIVATE) != 0)
+        {
+            return false;
+        }
+
+        var owner = User32.GetWindow(hwnd, User32.GW_OWNER);
+        if (owner != 0 && (exStyle & User32.WS_EX_APPWINDOW) == 0)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     public static bool IsIgnoredClass(string cls)
@@ -36,8 +59,11 @@ internal static class WindowCandidateFilter
             || cls.Equals("MultitaskingViewFrame", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("ThumbnailDeviceHelperWnd", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("tooltips_class32", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("OnScreen Display Window", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("GDI+ Hook Window Class", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("XamlExplorerHostIslandWindow", StringComparison.OrdinalIgnoreCase)
+            || cls.Equals("Xaml_WindowedPopupClass", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("Progman", StringComparison.OrdinalIgnoreCase)
             || cls.Equals("WorkerW", StringComparison.OrdinalIgnoreCase);
     }

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-04-23 Alt-Tab-style filtering for target candidates
+
+### Task
+- Prevent helper, popup, OSD, and cloaked windows from being treated as routable target candidates when they cannot be tab-stopped like normal app windows.
+
+### Changed
+- Extended target-window eligibility beyond visibility/root-window checks to reject DWM-cloaked windows.
+- Added extended-style filtering for `WS_EX_TOOLWINDOW` and `WS_EX_NOACTIVATE` windows.
+- Excluded owned popup windows unless they explicitly opt into app-window behavior with `WS_EX_APPWINDOW`.
+- Added Win32/DWM interop helpers for owner, extended-style, and cloaked-window checks.
+- Added explicit class exclusions for `Xaml_WindowedPopupClass`, `OnScreen Display Window`, and `GDI+ Hook Window Class`.
+
+### Why
+- Runtime logs showed transient Explorer, Chrome helper, and HotKeyOSD windows appearing in target-candidate scans even though they are not useful Alt-Tab-style destinations.
+- Filtering by window styles and DWM cloaking catches the broader class of non-targetable helper surfaces instead of relying only on a growing class-name blacklist.
+
 ## 2026-04-21 Root/visible window filtering for foreground history and global fallback
 
 ### Task
