@@ -87,7 +87,7 @@ How to update it:
   - `dotnet publish -c Release` (if it cannot complete because the app is running, notify the user)
 - Do not run `dotnet build` or `dotnet publish` for documentation-only changes when no code or project files were touched.
 - If the user asks for a commit, give a brief description of what changed.
-- If the prompt begins with `FULL:`, treat it as a requirement to do these tasks after finishing:
+- If the prompt begins with `PUBLISH:`, treat it as a requirement to do these tasks after finishing:
   - run `dotnet build`
   - run `dotnet publish -c Release`
   - create a commit with a brief description
